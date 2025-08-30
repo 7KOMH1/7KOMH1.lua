@@ -1,372 +1,311 @@
---[[ 
-🛡️ سكربت حماية العم حكومه 😁🍷 (Ultimate Protection)
-- واجهة متوسطة + زر صغير لفتح/قفل
-- مضاد: فلينق / تجميد / طيران إجباري / جذب / أدوات فيزيائية قسرية
-- إصلاح تلقائي للمشي/القفز/الوضع
-- حقوق RGB متحركة بأسفل الشاشة
-- كود واحد متكامل وخفيف لاج
+-- ############################################################
+-- 👑 أقوى سكربت حماية شامل (جاهز للرفع) 👑
+-- حقوق العم حكومه 😁🍷  | UI RGB + Toggle + أقوى مضادات
+-- ملاحظات:
+-- 1) بعض المزايا الاختيارية تحتاج بيئة إكسبلويت (getrawmetatable/newcclosure/checkcaller/setreadonly)
+-- 2) الكود موحّد في لوب واحد لتقليل اللاج + ريت-ليميت ذكي
+-- ############################################################
 
-ملاحظة: مفيش حماية مضمونة 100% في كل الألعاب/التحديثات، بس ده معموله أقصى صلابة وأقل لاج.
-]]
+-- =============== Services ===============
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local TeleportService   = game:GetService("TeleportService")
+local GuiService        = game:GetService("GuiService")
 
---// Services
-local Players            = game:GetService("Players")
-local RunService         = game:GetService("RunService")
-local TweenService       = game:GetService("TweenService")
-local StarterGui         = game:GetService("StarterGui")
+local LP                = Players.LocalPlayer
 
-local LP                 = Players.LocalPlayer
+-- =============== State ===============
+local ProtectionEnabled = true  -- شغالة افتراضياً
+local RGBt              = 0
+local LastCF            = nil
+local LastVelClamp      = 0
+local lastFix           = 0
+local lastScan          = 0
+local VELOCITY_LIMIT    = 180    -- حد اقصى للسرعة لمنع الفلنق
+local ANG_VEL_LIMIT     = 60     -- حد اقصى للدوران لمنع الفلنق
+local TELEPORT_DELTA    = 120    -- لو اتسحب فجأه اكتر من كده نرجع مكاننا
+local TICK_COOLDOWN     = 0.15   -- كولداون اصلاح
+local SCAN_COOLDOWN     = 0.35   -- كولداون فحوصات ثقيلة
+local MIN_WALKSPEED     = 14     -- أقل مشي طبيعي
+local MAX_WALKSPEED     = 24     -- لو حد حاول يبوظ يرجّع رينج طبيعي
+local MIN_JUMP          = 40
+local MAX_JUMP          = 70
 
---// Config
-local CFG = {
-    UI = {
-        SmallButtonPos   = UDim2.new(0, 20, 1, -60),
-        PanelSize        = UDim2.new(0, 360, 0, 260),
-        PanelPosHidden   = UDim2.new(0.5, -180, 1, 20),
-        PanelPosShown    = UDim2.new(0.5, -180, 0.5, -130),
-        CornerRadius     = 16,
-    },
-    Defaults = {
-        WalkSpeed        = 16,
-        JumpPower        = 50,
-        HipHeight        = 2,
-        Gravity          = workspace.Gravity, -- بنرجعها لو حد لعب فيها محلياً
-    },
-    Limits = {
-        MaxSelfLinearVel = 150,      -- حد السرعة الطولية المسموح بيها (عشان مضاد الفلينق)
-        MaxSelfAngular   = 30,       -- حد الدوران الزائد
-    },
-    Loop = {
-        Hz               = 20,       -- عدد المرات في الثانية (أقل لاج)
-    },
-    BadForces = { -- كل اللي يتحذف لو لُزق على شخصيتك غصب
-        "BodyForce","BodyGyro","BodyPosition","BodyVelocity",
-        "RocketPropulsion","AlignPosition","AlignOrientation",
-        "VectorForce","Torque","LinearVelocity","AngularVelocity",
-        "HingeConstraint","SpringConstraint","RodConstraint"
-    },
-    BadWords = { -- فلتر محلي (للتنبيه فقط)
-        "sex","porn","fuck","xnxx","s3x","rape","dick","pussy","boobs",
-        "نيك","مص","اغتصاب","كس","زبر","شرج","طيز"
-    },
-    KickAwayVelocity = Vector3.new(0, 180, 0), -- رفسة للي يقرب وهو مؤذي
-    NearDistance     = 5.5
-}
+-- =============== Helpers ===============
+local function now() return os.clock() end
 
---// Utils
-local function safeDescend(inst, fn)
-    for _,v in ipairs(inst:GetDescendants()) do
-        pcall(fn, v)
-    end
-end
-
-local function makeCorner(parent, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or CFG.UI.CornerRadius)
-    c.Parent = parent
-    return c
-end
-
-local function hsvLoop(setter)
-    task.spawn(function()
-        local h=0
-        while setter and task.wait(0.03) do
-            h = (h + 0.01) % 1
-            pcall(setter, Color3.fromHSV(h,1,1))
-        end
-    end)
-end
-
-local function character()
-    return LP.Character or LP.CharacterAdded:Wait()
-end
-
-local function humanoid()
-    local ch = character()
+local function getHumanoid()
+    local ch = LP.Character
+    if not ch then return nil end
     return ch:FindFirstChildOfClass("Humanoid")
 end
 
-local function root()
-    local ch = character()
+local function getHRP()
+    local ch = LP.Character
+    if not ch then return nil end
     return ch:FindFirstChild("HumanoidRootPart")
 end
 
--- إصلاح فوري لقيم أساسية
-local function quickFix()
-    local hum = humanoid()
-    local hrp = root()
-    if hum then
-        hum.PlatformStand = false
-        hum.Sit = false
-        hum.JumpPower = CFG.Defaults.JumpPower
-        hum.WalkSpeed = CFG.Defaults.WalkSpeed
-        hum.HipHeight = CFG.Defaults.HipHeight
-        hum.AutoRotate = true
-        pcall(function()
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end)
+local function clampVec3(v, m)
+    local mag = v.Magnitude
+    if mag > m then
+        return v.Unit * m
     end
-    if hrp then
-        hrp.Anchored = false
-        hrp.AssemblyLinearVelocity = Vector3.new(0, math.clamp(hrp.AssemblyLinearVelocity.Y, -50, 50), 0)
-        hrp.AssemblyAngularVelocity = Vector3.new()
-        hrp.CustomPhysicalProperties = PhysicalProperties.new(1,0.3,0.5)
-        if hrp:FindFirstChildWhichIsA("BodyMover") then
-            for _,bm in ipairs(hrp:GetChildren()) do
-                if bm:IsA("BodyMover") or bm:IsA("Constraint") then pcall(function() bm:Destroy() end) end
-            end
-        end
-    end
-    workspace.Gravity = CFG.Defaults.Gravity
+    return v
 end
 
--- إزالة أي قوى/قيود غريبة لاصقة في الشخصية
-local function purgeBadForces()
-    local ch = character()
-    safeDescend(ch, function(v)
-        for _,cn in ipairs(CFG.BadForces) do
-            if v.ClassName == cn then pcall(function() v:Destroy() end) end
-        end
-    end)
+-- =============== UI ===============
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "Gov_Protection_UI"
+ScreenGui.ResetOnSpawn = false
+if syn and syn.protect_gui then
+    syn.protect_gui(ScreenGui)
+    ScreenGui.Parent = game.CoreGui
+else
+    ScreenGui.Parent = (LP:FindFirstChildOfClass("PlayerGui") or LP:WaitForChild("PlayerGui"))
 end
 
--- فحص فلينق/تجميد وحماية ذاتية
-local function protectSelf()
-    local hum = humanoid()
-    local hrp = root()
-    if not hum or not hrp then return end
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 280, 0, 180)
+Frame.Position = UDim2.new(0.05, 0, 0.2, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(24,24,24)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
 
-    -- مضاد التجميد/الإجبار
-    if hrp.Anchored then hrp.Anchored = false end
-    if hum.PlatformStand then hum.PlatformStand = false end
-    if hum.SeatPart then hum.Sit = false end
-    if hum.WalkSpeed < 8 or hum.WalkSpeed > 120 then hum.WalkSpeed = CFG.Defaults.WalkSpeed end
-    if hum.JumpPower < 30 or hum.JumpPower > 200 then hum.JumpPower = CFG.Defaults.JumpPower end
-    if not hum.AutoRotate then hum.AutoRotate = true end
+local corner = Instance.new("UICorner", Frame)
+corner.CornerRadius = UDim.new(0, 14)
 
-    -- حد السرعات (مضاد فلينق)
-    local lv = hrp.AssemblyLinearVelocity
-    local av = hrp.AssemblyAngularVelocity
-    local maxL = CFG.Limits.MaxSelfLinearVel
-    local maxA = CFG.Limits.MaxSelfAngular
-    if lv.Magnitude > maxL then
-        local y = math.clamp(lv.Y, -maxL, maxL)
-        local flat = lv.Unit * maxL
-        hrp.AssemblyLinearVelocity = Vector3.new(flat.X, y, flat.Z)
-    end
-    if math.max(math.abs(av.X),math.abs(av.Y),math.abs(av.Z)) > maxA then
-        hrp.AssemblyAngularVelocity = Vector3.new()
-    end
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -12, 0, 36)
+Title.Position = UDim2.new(0, 6, 0, 8)
+Title.BackgroundTransparency = 1
+Title.Text = "👑 حماية العم حكومه 😁🍷"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.TextColor3 = Color3.fromRGB(255,255,255)
+Title.Parent = Frame
 
-    -- إزالة أي قوى/قيود ضارة مضافة حديثاً
-    purgeBadForces()
-end
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0.9, 0, 0, 42)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0, 58)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 16
+ToggleBtn.Text = "🟢 الحماية: شغالة (F10)"
+ToggleBtn.Parent = Frame
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 10)
 
--- رفس المؤذيين القريبين (محلياً)
-local function repelAggressors()
-    local myCh = character()
-    local myHRP = root()
-    if not myHRP then return end
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LP and plr.Character then
-            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local dist = (hrp.Position - myHRP.Position).Magnitude
-                if dist < CFG.NearDistance then
-                    -- لو داخل جداً عليك → رفسة لفوق
-                    pcall(function()
-                        hrp.AssemblyLinearVelocity = CFG.KickAwayVelocity
-                    end)
-                end
-            end
-        end
-    end
-end
+local AntiRemoteSwitch = Instance.new("TextButton")
+AntiRemoteSwitch.Size = UDim2.new(0.43, 0, 0, 34)
+AntiRemoteSwitch.Position = UDim2.new(0.05, 0, 0, 110)
+AntiRemoteSwitch.BackgroundColor3 = Color3.fromRGB(50,50,50)
+AntiRemoteSwitch.BorderSizePixel = 0
+AntiRemoteSwitch.TextColor3 = Color3.fromRGB(255,255,255)
+AntiRemoteSwitch.Font = Enum.Font.GothamBold
+AntiRemoteSwitch.TextSize = 14
+AntiRemoteSwitch.Text = "🔒 مضاد Remote: ON"
+AntiRemoteSwitch.Parent = Frame
+Instance.new("UICorner", AntiRemoteSwitch).CornerRadius = UDim.new(0, 8)
 
--- فلتر محلي للكلمات (تنبيه فقط)
-local function hookChatFilter()
-    if game:GetService("TextChatService").ChatVersion == Enum.ChatVersion.TextChatService then
-        local TextChatService = game:GetService("TextChatService")
-        TextChatService.OnIncomingMessage = function(msg)
-            local txt = string.lower(msg.Text or "")
-            for _,bw in ipairs(CFG.BadWords) do
-                if txt:find(bw) then
-                    -- نخفي الرسالة محلياً ونطلع تنبيه بسيط
-                    StarterGui:SetCore("ChatMakeSystemMessage", {Text="🚫 رسالة غير لائقة تم إخفاؤها محلياً.", Color = Color3.fromRGB(255,80,80)})
-                    return nil
-                end
-            end
-            return msg
-        end
-    else
-        -- Legacy Chat: ما نقدرش نمسح بسهولة، نكتفي بالتنبيه.
-        LP.Chatted:Connect(function(m)
-            local s = string.lower(m or "")
-            for _,bw in ipairs(CFG.BadWords) do
-                if s:find(bw) then
-                    StarterGui:SetCore("ChatMakeSystemMessage", {Text="🚫 رسالة غير لائقة (محلية).", Color = Color3.fromRGB(255,80,80)})
-                    break
-                end
-            end
-        end)
-    end
-end
+local AntiTP_Switch = Instance.new("TextButton")
+AntiTP_Switch.Size = UDim2.new(0.43, 0, 0, 34)
+AntiTP_Switch.Position = UDim2.new(0.52, 0, 0, 110)
+AntiTP_Switch.BackgroundColor3 = Color3.fromRGB(50,50,50)
+AntiTP_Switch.BorderSizePixel = 0
+AntiTP_Switch.TextColor3 = Color3.fromRGB(255,255,255)
+AntiTP_Switch.Font = Enum.Font.GothamBold
+AntiTP_Switch.TextSize = 14
+AntiTP_Switch.Text = "📍 مضاد Teleport: ON"
+AntiTP_Switch.Parent = Frame
+Instance.new("UICorner", AntiTP_Switch).CornerRadius = UDim.new(0, 8)
 
---// GUI
-local CoreGui = game:GetService("CoreGui")
-local sg = Instance.new("ScreenGui")
-sg.Name = "HKM_Protection_UI"
-sg.ResetOnSpawn = false
-sg.Parent = CoreGui
+local HideBtn = Instance.new("TextButton")
+HideBtn.Size = UDim2.new(0.9, 0, 0, 32)
+HideBtn.Position = UDim2.new(0.05, 0, 0, 148)
+HideBtn.BackgroundColor3 = Color3.fromRGB(36,36,36)
+HideBtn.BorderSizePixel = 0
+HideBtn.TextColor3 = Color3.fromRGB(255,255,255)
+HideBtn.Font = Enum.Font.GothamBold
+HideBtn.TextSize = 14
+HideBtn.Text = "🟦 اخفاء / اظهار"
+HideBtn.Parent = Frame
+Instance.new("UICorner", HideBtn).CornerRadius = UDim.new(0, 8)
 
--- زر صغير ثابت
-local mini = Instance.new("TextButton")
-mini.Size = UDim2.new(0, 110, 0, 32)
-mini.Position = CFG.UI.SmallButtonPos
-mini.BackgroundColor3 = Color3.fromRGB(40,40,40)
-mini.TextColor3 = Color3.new(1,1,1)
-mini.Text = "🛡️ الحماية"
-mini.Font = Enum.Font.GothamBold
-mini.TextSize = 14
-mini.AutoButtonColor = true
-mini.Parent = sg
-makeCorner(mini, 10)
-mini.Active = true
-mini.Draggable = true
+-- حقوق ثابتة صغيرة أسفل الشاشة
+local Watermark = Instance.new("TextLabel")
+Watermark.Size = UDim2.new(0, 260, 0, 22)
+Watermark.Position = UDim2.new(1, -270, 1, -28)
+Watermark.BackgroundTransparency = 1
+Watermark.Text = "حقوق العم حكومه 😁🍷"
+Watermark.Font = Enum.Font.Gotham
+Watermark.TextSize = 16
+Watermark.TextColor3 = Color3.new(1,1,1)
+Watermark.Parent = ScreenGui
 
--- لوحة رئيسية
-local panel = Instance.new("Frame")
-panel.Size = CFG.UI.PanelSize
-panel.Position = CFG.UI.PanelPosHidden
-panel.BackgroundColor3 = Color3.fromRGB(22,22,22)
-panel.BorderSizePixel = 0
-panel.Visible = false
-panel.Parent = sg
-makeCorner(panel, CFG.UI.CornerRadius)
-
--- عنوان
-local title = Instance.new("TextLabel")
-title.BackgroundTransparency = 1
-title.Size = UDim2.new(1,-20,0,40)
-title.Position = UDim2.new(0,10,0,10)
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 20
-title.Text = "🛡️ حماية العم حكومه 😁🍷"
-title.TextColor3 = Color3.fromRGB(255,255,255)
-title.Parent = panel
-
--- RGB للعنوان
-hsvLoop(function(c) if title and title.Parent then title.TextColor3 = c end end)
+-- RGB بسيط للعنوان و الووترمارك
+RunService.RenderStepped:Connect(function()
+    RGBt = (RGBt + 0.015) % 1
+    local color = Color3.fromHSV(RGBt, 1, 1)
+    Title.TextColor3 = color
+    Watermark.TextColor3 = color
+end)
 
 -- أزرار
-local function mkBtn(txt, y, color)
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1,-20,0,38)
-    b.Position = UDim2.new(0,10,0,y)
-    b.BackgroundColor3 = color or Color3.fromRGB(45,45,45)
-    b.TextColor3 = Color3.fromRGB(250,250,250)
-    b.Text = txt
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 16
-    b.AutoButtonColor = true
-    b.Parent = panel
-    makeCorner(b, 10)
-    return b
-end
+local AntiRemoteON = true
+local AntiTP_ON     = true
 
-local info = Instance.new("TextLabel")
-info.BackgroundTransparency = 1
-info.Size = UDim2.new(1,-20,0,22)
-info.Position = UDim2.new(0,10,1,-26)
-info.Font = Enum.Font.Gotham
-info.TextSize = 14
-info.TextXAlignment = Enum.TextXAlignment.Center
-info.Text = "وضع الحماية: قيد التشغيل ✅"
-info.TextColor3 = Color3.fromRGB(190,190,190)
-info.Parent = panel
-
-local btnToggleProtect = mkBtn("تشغيل/إيقاف الحماية", 58, Color3.fromRGB(30,120,60))
-local btnQuickFix      = mkBtn("إصلاح فوري (سرعة/قفز/فك تجميد)", 106, Color3.fromRGB(60,60,100))
-local btnPurge         = mkBtn("إزالة أي قوى/قيود غريبة", 154, Color3.fromRGB(120,60,60))
-local btnClosePanel    = mkBtn("إخفاء اللوحة", 202, Color3.fromRGB(60,60,60))
-
--- وسم الحقوق بأسفل الشاشة
-local rights = Instance.new("TextLabel")
-rights.BackgroundTransparency = 1
-rights.Size = UDim2.new(0, 240, 0, 24)
-rights.Position = UDim2.new(1, -250, 1, -30)
-rights.Text = "حقوق العم حكومه 😁🍷"
-rights.Font = Enum.Font.GothamBold
-rights.TextSize = 16
-rights.TextColor3 = Color3.fromRGB(255,255,255)
-rights.Parent = sg
-hsvLoop(function(c) if rights and rights.Parent then rights.TextColor3 = c end end)
-
--- أنيميشن فتح/قفل
-local function showPanel(show)
-    panel.Visible = true
-    local goal = {}
-    goal.Position = show and CFG.UI.PanelPosShown or CFG.UI.PanelPosHidden
-    local tw = TweenService:Create(panel, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal)
-    tw:Play()
-    tw.Completed:Wait()
-    if not show then panel.Visible = false end
-end
-
-mini.MouseButton1Click:Connect(function()
-    if not panel.Visible then
-        showPanel(true)
+local function updateToggleText()
+    if ProtectionEnabled then
+        ToggleBtn.Text = "🟢 الحماية: شغالة (F10)"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0,160,0)
     else
-        showPanel(false)
+        ToggleBtn.Text = "🔴 الحماية: مقفولة (F10)"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(160,0,0)
+    end
+end
+updateToggleText()
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    ProtectionEnabled = not ProtectionEnabled
+    updateToggleText()
+end)
+
+AntiRemoteSwitch.MouseButton1Click:Connect(function()
+    AntiRemoteON = not AntiRemoteON
+    AntiRemoteSwitch.Text = AntiRemoteON and "🔒 مضاد Remote: ON" or "🔓 مضاد Remote: OFF"
+    AntiRemoteSwitch.BackgroundColor3 = AntiRemoteON and Color3.fromRGB(50,110,50) or Color3.fromRGB(90,50,50)
+end)
+
+AntiTP_Switch.MouseButton1Click:Connect(function()
+    AntiTP_ON = not AntiTP_ON
+    AntiTP_Switch.Text = AntiTP_ON and "📍 مضاد Teleport: ON" or "📍 مضاد Teleport: OFF"
+    AntiTP_Switch.BackgroundColor3 = AntiTP_ON and Color3.fromRGB(50,110,50) or Color3.fromRGB(90,50,50)
+end)
+
+HideBtn.MouseButton1Click:Connect(function()
+    Frame.Visible = not Frame.Visible
+end)
+
+-- مفتاح F10 تشغيل/إيقاف
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.F10 then
+        ProtectionEnabled = not ProtectionEnabled
+        updateToggleText()
+    elseif input.KeyCode == Enum.KeyCode.F8 then
+        Frame.Visible = not Frame.Visible
     end
 end)
 
-btnClosePanel.MouseButton1Click:Connect(function()
-    showPanel(false)
+-- =============== Anti-Remote Hook (اختياري بحسب البيئة) ===============
+local hasExploit = (getrawmetatable and newcclosure and setreadonly and getnamecallmethod and (checkcaller ~= nil))
+if hasExploit then
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        if ProtectionEnabled and AntiRemoteON then
+            if (method == "FireServer" or method == "InvokeServer") and not checkcaller() then
+                -- منع أي محاولة تحكم عن بعد على اللاعب من سكربتات غريبة
+                return nil
+            end
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(mt, true)
+end
+
+-- =============== Auto-Rejoin (محاولة مبسطة) ===============
+-- لو اترفست أو فشل التليبورٹ، نحاول نرجع
+TeleportService.TeleportInitFailed:Connect(function(player, result)
+    if player == LP then
+        task.delay(2, function()
+            pcall(function()
+                TeleportService:Teleport(game.PlaceId, LP)
+            end)
+        end)
+    end
 end)
 
--- منطق الحماية العام
-local ProtectionOn = true
-
-btnToggleProtect.MouseButton1Click:Connect(function()
-    ProtectionOn = not ProtectionOn
-    info.Text = ProtectionOn and "وضع الحماية: قيد التشغيل ✅" or "وضع الحماية: متوقف ❌"
-    btnToggleProtect.BackgroundColor3 = ProtectionOn and Color3.fromRGB(30,120,60) or Color3.fromRGB(120,60,60)
-end)
-
-btnQuickFix.MouseButton1Click:Connect(function()
-    quickFix()
-    StarterGui:SetCore("SendNotification",{Title="إصلاح", Text="تم إصلاح الشخصية.", Duration=2})
-end)
-
-btnPurge.MouseButton1Click:Connect(function()
-    purgeBadForces()
-    StarterGui:SetCore("SendNotification",{Title="تنظيف", Text="تم إزالة أي قوى/قيود غريبة.", Duration=2})
-end)
-
--- ربط فلتر الشات المحلي (إخفاء الإباحي محلياً)
-hookChatFilter()
-
--- لوجيك مستمر (خفيف)
-local lastTick = 0
+-- =============== Core Protection Loop ===============
 RunService.Heartbeat:Connect(function(dt)
-    -- خنق التكرار لتقليل اللاج
-    local now = tick()
-    if now - lastTick < (1/CFG.Loop.Hz) then return end
-    lastTick = now
+    if not ProtectionEnabled then return end
 
-    if not ProtectionOn then return end
+    local ch  = LP.Character
+    local hum = getHumanoid()
+    local hrp = getHRP()
+    if not (ch and hum and hrp) then return end
 
-    -- حماية مستمرة
-    pcall(protectSelf)
-    pcall(repelAggressors)
+    -- (1) Anti-Fling / Anti-Freeze / Physics Cleanup (خفيف)
+    -- إزالة أي BodyMover/Align مضافة غصب
+    local t = now()
+    if (t - lastScan) > SCAN_COOLDOWN then
+        lastScan = t
+        for _,obj in ipairs(ch:GetDescendants()) do
+            if obj:IsA("BodyMover") or obj:IsA("AlignPosition") or obj:IsA("AlignOrientation") or obj:IsA("VectorForce") or obj:IsA("Torque") then
+                -- تسيب حاجات اللعبة الطبيعية؟ مفيش حل سحري هنا، بس ده يمنع الفلنق الشائع
+                pcall(function() obj:Destroy() end)
+            end
+        end
+
+        -- أدوات/إكسسوارات محقونة
+        for _,v in ipairs(ch:GetChildren()) do
+            if v:IsA("Tool") or v:IsA("Accessory") then
+                if v.Parent ~= LP.Backpack and v.Parent ~= ch then
+                    pcall(function() v:Destroy() end)
+                end
+            end
+        end
+    end
+
+    -- (2) Unfreeze + Collision طبيعي
+    if hrp.Anchored then hrp.Anchored = false end
+    if not hrp.CanCollide then hrp.CanCollide = true end
+
+    -- (3) Clamp Velocity لمنع الفلنق العنيف (ريت-ليميت)
+    if (t - LastVelClamp) > TICK_COOLDOWN then
+        LastVelClamp = t
+        hrp.AssemblyLinearVelocity     = clampVec3(hrp.AssemblyLinearVelocity, VELOCITY_LIMIT)
+        hrp.AssemblyAngularVelocity    = clampVec3(hrp.AssemblyAngularVelocity, ANG_VEL_LIMIT)
+    end
+
+    -- (4) Anti-Teleport: رجوع لو اتسحبت فجأة
+    if AntiTP_ON then
+        if LastCF then
+            local delta = (hrp.Position - LastCF.Position).Magnitude
+            if delta > TELEPORT_DELTA then
+                hrp.CFrame = LastCF
+            end
+        end
+        LastCF = hrp.CFrame
+    end
+
+    -- (5) WalkSpeed/JumpPower normalization (يحافظ على الطبيعي)
+    if hum.WalkSpeed < MIN_WALKSPEED or hum.WalkSpeed > MAX_WALKSPEED then
+        hum.WalkSpeed = 16
+    end
+    if hum.JumpPower < MIN_JUMP or hum.JumpPower > MAX_JUMP then
+        hum.JumpPower = 50
+    end
 end)
 
--- إعادة ضبط لما الشخصية تعيد السبون
-LP.CharacterAdded:Connect(function()
-    task.wait(0.25)
-    quickFix()
-    purgeBadForces()
+-- =============== Safe Respawn Handling ===============
+LP.CharacterAdded:Connect(function(char)
+    LastCF = nil
+    task.defer(function()
+        local hum = char:WaitForChild("Humanoid", 6)
+        local hrp = char:WaitForChild("HumanoidRootPart", 6)
+        if hum and hrp then
+            hum.PlatformStand = false
+            hrp.Anchored = false
+        end
+    end)
 end)
 
-print("✅ حماية العم حكومه 😁🍷 شغّالة.")
+-- تم — أقوى حماية شغالة فعلياً، مش مجرد زرار.
