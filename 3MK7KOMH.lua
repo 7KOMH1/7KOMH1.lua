@@ -1,130 +1,132 @@
--- سكربت العم حكومه 😁🍷
--- منور سكربت العم حكومه
+-- سكربت السرعة + درفت + تربو
+-- حقوق العم حكومه 😁🍷
 
--- إعدادات
-local turboKey = Enum.KeyCode.T
-local driftKey = Enum.KeyCode.LeftShift
-local toggleGuiKey = Enum.KeyCode.X
+local player = game.Players.LocalPlayer
+local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui"))
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local SpeedBox = Instance.new("TextBox")
+local SpeedButton = Instance.new("TextButton")
+local DriftButton = Instance.new("TextButton")
+local TurboButton = Instance.new("TextButton")
+local ToggleButton = Instance.new("TextButton")
+local CarImage = Instance.new("ImageLabel")
 
-local maxSpeed = 2000
-local turboForce = 5000
-local driftFriction = 0.2
+-- الإطار الأساسي
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Size = UDim2.new(0, 380, 0, 280)
+MainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Visible = true
+MainFrame.BorderSizePixel = 0
 
--- عمل GUI
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local ScreenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-ScreenGui.ResetOnSpawn = false
-
--- شاشة تحميل
-local LoadingFrame = Instance.new("Frame", ScreenGui)
-LoadingFrame.Size = UDim2.new(0.5,0,0.5,0)
-LoadingFrame.Position = UDim2.new(0.25,0,0.25,0)
-LoadingFrame.BackgroundTransparency = 0
-LoadingFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
-
-local BgImage = Instance.new("ImageLabel", LoadingFrame)
-BgImage.Size = UDim2.new(1,0,1,0)
-BgImage.Image = "https://cdn.discordapp.com/attachments/1409312288996986950/1411236683856478289/406130d543e87236c27d8ace0d0533c8.jpg"
-BgImage.BackgroundTransparency = 1
-
-local Title = Instance.new("TextLabel", LoadingFrame)
-Title.Size = UDim2.new(1,0,0.3,0)
-Title.Position = UDim2.new(0,0,0,0)
-Title.Text = "حكومه بيمسي 😁🍷"
-Title.TextColor3 = Color3.fromRGB(255,255,0)
-Title.TextScaled = true
+-- العنوان RGB
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
 Title.Font = Enum.Font.GothamBold
+Title.Text = "🚗 سكربت العم حكومه 😁🍷"
+Title.TextSize = 22
 
-local SubTitle = Instance.new("TextLabel", LoadingFrame)
-SubTitle.Size = UDim2.new(1,0,0.2,0)
-SubTitle.Position = UDim2.new(0,0,0.7,0)
-SubTitle.Text = "منور سكربت العم حكومه 😁🍷"
-SubTitle.TextColor3 = Color3.fromRGB(255,255,255)
-SubTitle.TextScaled = true
-SubTitle.BackgroundTransparency = 1
-SubTitle.Font = Enum.Font.GothamBold
-
--- القائمة الرئيسية
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0.35,0,0.4,0)
-MainFrame.Position = UDim2.new(0.325,0,0.3,0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-MainFrame.Visible = false
-
-local UICorner = Instance.new("UICorner", MainFrame)
-UICorner.CornerRadius = UDim.new(0,12)
-
-local UIStroke = Instance.new("UIStroke", MainFrame)
-UIStroke.Thickness = 2
-UIStroke.Color = Color3.fromRGB(255,255,0)
-
-local TitleMain = Instance.new("TextLabel", MainFrame)
-TitleMain.Size = UDim2.new(1,0,0.2,0)
-TitleMain.Text = "🚗 سكربت سرعه ودرفت - العم حكومه 😁🍷"
-TitleMain.TextScaled = true
-TitleMain.TextColor3 = Color3.fromRGB(255,255,255)
-TitleMain.BackgroundTransparency = 1
-TitleMain.Font = Enum.Font.GothamBold
-
--- أزرار
-local function createButton(text,posY,callback)
-    local Btn = Instance.new("TextButton", MainFrame)
-    Btn.Size = UDim2.new(0.8,0,0.15,0)
-    Btn.Position = UDim2.new(0.1,0,posY,0)
-    Btn.Text = text
-    Btn.TextScaled = true
-    Btn.TextColor3 = Color3.fromRGB(255,255,255)
-    Btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-    Btn.Font = Enum.Font.GothamBold
-    local corner = Instance.new("UICorner", Btn)
-    corner.CornerRadius = UDim.new(0,8)
-    Btn.MouseButton1Click:Connect(callback)
-end
-
--- منور الرساله
-task.delay(4,function()
-    LoadingFrame.Visible = false
-    MainFrame.Visible = true
-end)
-
--- التحكم في العربية
-local turboEnabled = false
-local driftEnabled = false
-
-createButton("تشغيل/ايقاف التربو",0.25,function()
-    turboEnabled = not turboEnabled
-end)
-
-createButton("تشغيل/ايقاف الدرفت",0.45,function()
-    driftEnabled = not driftEnabled
-end)
-
--- كود التربو والدرفت
-game:GetService("RunService").Heartbeat:Connect(function()
-    local char = player.Character
-    if char and char:FindFirstChild("Humanoid") then
-        local seat = char:FindFirstChildWhichIsA("VehicleSeat",true)
-        if seat then
-            if turboEnabled then
-                seat.MaxSpeed = maxSpeed
-                seat.Velocity = seat.CFrame.LookVector * turboForce
-            else
-                seat.MaxSpeed = 50
-            end
-            if driftEnabled then
-                seat.Torque = Vector3.new(0,10000,0)
-                seat.Steer = seat.Steer*1.5
-            end
+-- النص يلمع RGB
+spawn(function()
+    while true do
+        for i = 0, 255, 5 do
+            Title.TextColor3 = Color3.fromHSV(i/255, 1, 1)
+            wait(0.05)
         end
     end
 end)
 
--- زر فتح/قفل
-game:GetService("UserInputService").InputBegan:Connect(function(input,gpe)
-    if gpe then return end
-    if input.KeyCode == toggleGuiKey then
-        MainFrame.Visible = not MainFrame.Visible
+-- صورة
+CarImage.Parent = MainFrame
+CarImage.Size = UDim2.new(0, 100, 0, 100)
+CarImage.Position = UDim2.new(0.7, 0, 0.05, 0)
+CarImage.BackgroundTransparency = 1
+CarImage.Image = "rbxassetid://12284307677" -- 🔥 هنا حط لينك الصورة بتاعتك
+
+-- خانة السرعة
+SpeedBox.Parent = MainFrame
+SpeedBox.Size = UDim2.new(0, 200, 0, 40)
+SpeedBox.Position = UDim2.new(0.1, 0, 0.25, 0)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+SpeedBox.PlaceholderText = "اكتب السرعة (حد اقصى 2000)"
+SpeedBox.TextColor3 = Color3.new(1,1,1)
+SpeedBox.Font = Enum.Font.SourceSansBold
+SpeedBox.TextSize = 18
+
+-- زرار السرعة
+SpeedButton.Parent = MainFrame
+SpeedButton.Size = UDim2.new(0, 140, 0, 40)
+SpeedButton.Position = UDim2.new(0.35, 0, 0.4, 0)
+SpeedButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+SpeedButton.Text = "🚀 السرعة"
+SpeedButton.TextColor3 = Color3.new(1,1,1)
+
+-- زرار الدرفت
+DriftButton.Parent = MainFrame
+DriftButton.Size = UDim2.new(0, 140, 0, 40)
+DriftButton.Position = UDim2.new(0.1, 0, 0.6, 0)
+DriftButton.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+DriftButton.Text = "🌀 درفت"
+DriftButton.TextColor3 = Color3.new(1,1,1)
+
+-- زرار التربو
+TurboButton.Parent = MainFrame
+TurboButton.Size = UDim2.new(0, 140, 0, 40)
+TurboButton.Position = UDim2.new(0.55, 0, 0.6, 0)
+TurboButton.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+TurboButton.Text = "🔥 تربو"
+TurboButton.TextColor3 = Color3.new(1,1,1)
+
+-- زرار فتح/قفل
+ToggleButton.Parent = ScreenGui
+ToggleButton.Size = UDim2.new(0, 100, 0, 30)
+ToggleButton.Position = UDim2.new(0, 20, 0, 200)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ToggleButton.Text = "⚙️ فتح/قفل"
+ToggleButton.TextColor3 = Color3.new(1,1,1)
+
+-- 🔑 دوال السيارات
+local function getCar()
+    local char = player.Character
+    if not char then return nil end
+    return char:FindFirstChildWhichIsA("VehicleSeat", true)
+end
+
+-- زر السرعة
+SpeedButton.MouseButton1Click:Connect(function()
+    local seat = getCar()
+    if seat then
+        local val = tonumber(SpeedBox.Text)
+        if val and val > 0 then
+            if val > 2000 then val = 2000 end
+            seat.MaxSpeed = val
+        end
     end
 end)
+
+-- زر الدرفت
+DriftButton.MouseButton1Click:Connect(function()
+    local seat = getCar()
+    if seat then
+        seat.Torque = seat.Torque * 0.5
+    end
+end)
+
+-- زر التربو
+TurboButton.MouseButton1Click:Connect(function()
+    local seat = getCar()
+    if seat then
+        seat.Velocity = seat.Velocity + seat.CFrame.LookVector * 2000
+    end
+end)
+
+-- فتح/قفل
+ToggleButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
+
+print("✅ سكربت حكومه شغال بدون لاج قوي 😁🍷")
