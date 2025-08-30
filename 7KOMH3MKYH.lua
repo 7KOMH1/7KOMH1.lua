@@ -1,279 +1,239 @@
 --========================================================--
---  Government Advanced Script - Transform & Skin Copier
---  سكربت الحكومة المتطور - تحوّلات + نسخ سكنات + واجهة كاملة
---  حقوق العم حكومه 😁🍷
+--  سكربت الحكومة المتكامل (كود واحد) - Transform + Skin Copy + Avatar + Rejoin
+--  Government All-in-One - حقوق العم حكومه 😁🍷
 --========================================================--
 
---============[ Services ]============--
-local Players         = game:GetService("Players")
-local TweenService    = game:GetService("TweenService")
-local StarterGui      = game:GetService("StarterGui")
-local UserInputService= game:GetService("UserInputService")
+--================= Services =================
+local Players          = game:GetService("Players")
+local TweenService     = game:GetService("TweenService")
+local TeleportService  = game:GetService("TeleportService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui       = game:GetService("StarterGui")
 
-local LP = Players.LocalPlayer
+local LP        = Players.LocalPlayer
+local PlayerGui = LP:FindFirstChildOfClass("PlayerGui") or LP:WaitForChild("PlayerGui")
 
---============[ Utils ]============--
-local function safeWait(t) local s=tick(); repeat task.wait() until tick()-s>=(t or 0) end
-local function rgbCycle(step)
-    local h=0
-    return function()
-        h=(h+(step or 0.01))%1
-        return Color3.fromHSV(h,1,1)
-    end
-end
+--================= Utils ====================
 local function notify(txt, dur)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {Title="حكومة 😁🍷", Text=txt, Duration=dur or 3})
-    end)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {Title="حكومة 😁🍷", Text=tostring(txt), Duration=dur or 3})
+	end)
 end
+
+local function rgbCycle(step)
+	local h = 0
+	return function()
+		h = (h + (step or 0.01)) % 1
+		return Color3.fromHSV(h, 1, 1)
+	end
+end
+
 local function getHumanoid(plr)
-    local ch = plr.Character
-    if not ch then return nil end
-    return ch:FindFirstChildOfClass("Humanoid")
-end
-local function applyDescription(desc)
-    local hum = getHumanoid(LP)
-    if hum and desc then
-        local ok,err = pcall(function() hum:ApplyDescriptionReset(desc) end)
-        return ok,err
-    end
-    return false,"nohum"
-end
-local function getAppliedDescriptionOf(plr)
-    local hum = getHumanoid(plr)
-    if not hum then return nil end
-    local ok,desc = pcall(function() return hum:GetAppliedDescription() end)
-    if ok then return desc end
-    return nil
+	local ch = plr.Character or plr.CharacterAdded:Wait()
+	return ch:FindFirstChildOfClass("Humanoid")
 end
 
---============[ Language Picker ]============--
-local Lang = _G.GOV_LANG or "AR" -- default AR
+local function withHumanoid(descFn)
+	local hum = getHumanoid(Players.LocalPlayer)
+	if not hum then return false, "nohum" end
+	local ok, res = pcall(descFn, hum)
+	return ok and res ~= false, ok and res or "pcall"
+end
+
+local function safeApplyDescription(desc)
+	if not desc then return false end
+	return withHumanoid(function(hum)
+		hum:ApplyDescriptionReset(desc)
+		return true
+	end)
+end
+
+local function getCurrentDescription()
+	local hum = getHumanoid(LP)
+	if not hum then return nil end
+	local ok, d = pcall(function() return hum:GetAppliedDescription() end)
+	return ok and d or nil
+end
+
+local function cloneDescription(desc)
+	if not desc then return nil end
+	local new = Instance.new("HumanoidDescription")
+	for _,prop in ipairs({
+		"HeadColor","LeftArmColor","RightArmColor","TorsoColor","LeftLegColor","RightLegColor",
+		"HeightScale","WidthScale","DepthScale","HeadScale","BodyTypeScale","ProportionScale",
+		"GraphicTShirt","Shirt","Pants","Face","Head","Torso","RightArm","LeftArm","RightLeg","LeftLeg",
+		"AccessoryBlob","EmotesData",
+		"ClimbAnimation","FallAnimation","IdleAnimation","JumpAnimation","RunAnimation","SwimAnimation","WalkAnimation",
+		"FaceAccessory","NeckAccessory","ShouldersAccessory","FrontAccessory","BackAccessory","WaistAccessory","EmoteEnabled","OutfitId"
+	}) do
+		pcall(function() new[prop] = desc[prop] end)
+	end
+	return new
+end
+
+local function setAllBodyColors(desc, c3)
+	if not desc then return end
+	desc.HeadColor     = c3
+	desc.TorsoColor    = c3
+	desc.LeftArmColor  = c3
+	desc.RightArmColor = c3
+	desc.LeftLegColor  = c3
+	desc.RightLegColor = c3
+end
+
+--================= Language Picker =================
+local Lang = "AR" -- AR / EN
 do
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "GOV_Lang"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.Parent = LP:FindFirstChildOfClass("PlayerGui") or LP:WaitForChild("PlayerGui")
+	local LangGui = Instance.new("ScreenGui")
+	LangGui.Name = "GOV_LangPick"
+	LangGui.ResetOnSpawn = false
+	LangGui.Parent = PlayerGui
 
-    local frame = Instance.new("Frame", gui)
-    frame.Size = UDim2.fromOffset(420,260)
-    frame.Position = UDim2.new(.5,-210,.5,-130)
-    frame.BackgroundColor3 = Color3.fromRGB(24,24,24)
-    frame.Active = true; frame.Draggable = true
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,16)
-    local stroke = Instance.new("UIStroke", frame); stroke.Thickness=1.5
+	local F = Instance.new("Frame", LangGui)
+	F.Size = UDim2.fromOffset(420, 236)
+	F.Position = UDim2.new(.5,-210,.5,-118)
+	F.BackgroundColor3 = Color3.fromRGB(24,24,24)
+	F.Active = true; F.Draggable = true
+	Instance.new("UICorner", F).CornerRadius = UDim.new(0,14)
+	local st = Instance.new("UIStroke", F) st.Thickness = 1.5
+	local cyc = rgbCycle(0.006)
+	task.spawn(function() while st.Parent do st.Color = cyc(); task.wait(0.06) end end)
 
-    local title = Instance.new("TextLabel", frame)
-    title.Size = UDim2.new(1,0,0,56)
-    title.BackgroundTransparency = 1
-    title.Font = Enum.Font.GothamBlack
-    title.TextSize = 22
-    title.TextColor3 = Color3.new(1,1,1)
-    title.Text = "اختر اللغة / Choose Language"
+	local T = Instance.new("TextLabel", F)
+	T.Size = UDim2.new(1,0,0,56)
+	T.BackgroundTransparency = 1
+	T.Font = Enum.Font.GothamBlack
+	T.TextSize = 22
+	T.TextColor3 = Color3.new(1,1,1)
+	T.Text = "اختر اللغة / Choose Language"
 
-    local sub = Instance.new("TextLabel", frame)
-    sub.Size = UDim2.new(1,0,0,24)
-    sub.Position = UDim2.new(0,0,0,42)
-    sub.BackgroundTransparency = 1
-    sub.Font = Enum.Font.Gotham
-    sub.TextSize = 14
-    sub.TextColor3 = Color3.fromRGB(220,220,220)
-    sub.Text = "Government Script 😁🍷"
+	local AR = Instance.new("TextButton", F)
+	AR.Size = UDim2.new(.45,0,0,48)
+	AR.Position = UDim2.new(.05,0,.65,0)
+	AR.BackgroundColor3 = Color3.fromRGB(42,120,62)
+	AR.TextColor3 = Color3.new(1,1,1)
+	AR.Font = Enum.Font.GothamBold
+	AR.TextSize = 20
+	AR.Text = "🇪🇬 العربية"
+	Instance.new("UICorner", AR).CornerRadius = UDim.new(0,12)
 
-    local ar = Instance.new("TextButton", frame)
-    ar.Size = UDim2.new(.45,0,0,44)
-    ar.Position = UDim2.new(.05,0,.65,0)
-    ar.BackgroundColor3 = Color3.fromRGB(42,120,62)
-    ar.TextColor3 = Color3.new(1,1,1)
-    ar.Text = "🇪🇬 العربية"
-    ar.Font = Enum.Font.GothamBold
-    ar.TextSize = 20
-    Instance.new("UICorner", ar).CornerRadius = UDim.new(0,12)
+	local EN = Instance.new("TextButton", F)
+	EN.Size = UDim2.new(.45,0,0,48)
+	EN.Position = UDim2.new(.5,0,.65,0)
+	EN.BackgroundColor3 = Color3.fromRGB(62,62,140)
+	EN.TextColor3 = Color3.new(1,1,1)
+	EN.Font = Enum.Font.GothamBold
+	EN.TextSize = 20
+	EN.Text = "🇬🇧 English"
+	Instance.new("UICorner", EN).CornerRadius = UDim.new(0,12)
 
-    local en = Instance.new("TextButton", frame)
-    en.Size = UDim2.new(.45,0,0,44)
-    en.Position = UDim2.new(.5,0,.65,0)
-    en.BackgroundColor3 = Color3.fromRGB(62,62,140)
-    en.TextColor3 = Color3.new(1,1,1)
-    en.Text = "🇬🇧 English"
-    en.Font = Enum.Font.GothamBold
-    en.TextSize = 20
-    Instance.new("UICorner", en).CornerRadius = UDim.new(0,12)
-
-    local cyc = rgbCycle(0.006)
-    task.spawn(function()
-        while gui.Parent do
-            stroke.Color = cyc()
-            task.wait(0.05)
-        end
-    end)
-
-    local chosen=false
-    ar.MouseButton1Click:Connect(function() Lang="AR"; chosen=true end)
-    en.MouseButton1Click:Connect(function() Lang="EN"; chosen=true end)
-    repeat task.wait() until chosen
-
-    _G.GOV_LANG = Lang
-    TweenService:Create(frame, TweenInfo.new(.25), {Size=UDim2.fromOffset(420,0), Position=UDim2.new(.5,-210,.5,0)}):Play()
-    safeWait(.28); gui:Destroy()
+	local chosen=false
+	AR.MouseButton1Click:Connect(function() Lang="AR"; chosen=true end)
+	EN.MouseButton1Click:Connect(function() Lang="EN"; chosen=true end)
+	repeat task.wait() until chosen
+	TweenService:Create(F, TweenInfo.new(.25), {Size=UDim2.fromOffset(420,0)}):Play()
+	task.wait(.27)
+	LangGui:Destroy()
 end
-
---============[ Strings ]============--
-local T = {
-    TITLE_AR="👑 سكربت الحكومة المتطور - التحوّلات ونسخ السكنات 👑",
-    TITLE_EN="👑 Government Advanced Script - Transforms & Skin Copier 👑",
-    WELCOME_AR=("منوّر يا %s ✨ في سكربت الحكومة لنسخ السكنات والتحوّلات 😁🍷"),
-    WELCOME_EN=("Welcome %s ✨ to Government Script for Skins & Transforms 😁🍷"),
-    SHOWHIDE_AR="إظهار / إخفاء (P)",
-    SHOWHIDE_EN="Show / Hide (P)",
-    TAB_TRANSFORM_AR="التحوّلات",
-    TAB_TRANSFORM_EN="Transforms",
-    TAB_COPY_AR="نسخ السكنات",
-    TAB_COPY_EN="Skin Copier",
-    TAB_UTIL_AR="أدوات",
-    TAB_UTIL_EN="Utilities",
-    COPYLABEL_AR="نسخ سكن لاعب (أول 2-5 حروف)",
-    COPYLABEL_EN="Copy Player Skin (first 2-5 letters)",
-    COPYBTN_AR="نسخ الآن",
-    COPYBTN_EN="Copy Now",
-    STATUS_READY_AR="جاهز ✅",
-    STATUS_READY_EN="Ready ✅",
-    STATUS_COPIED_AR="تم النسخ ✅",
-    STATUS_COPIED_EN="Copied ✅",
-    STATUS_NOTFOUND_AR="لاعب غير موجود ❌",
-    STATUS_NOTFOUND_EN="Player not found ❌",
-    TRANSFORM_OK_AR="تم التحوّل إلى: ",
-    TRANSFORM_OK_EN="Transformed to: ",
-    TRANSFORM_FAIL_AR="تعذر التحوّل ❌",
-    TRANSFORM_FAIL_EN="Transform failed ❌",
-    REJOIN_AR="إعادة دخول السيرفر",
-    REJOIN_EN="Rejoin Same Server",
-    FOOT_AR="حكومة بيمسي 😁🍷",
-    FOOT_EN="Gov Bimsy 😁🍷",
-}
 local function L(ar,en) return (Lang=="AR") and ar or en end
+notify(L(("منوّر يا %s ✨ في سكربت الحكومة 😁🍷"):format(Players.LocalPlayer.DisplayName), ("Welcome %s ✨ to Government Script 😁🍷"):format(Players.LocalPlayer.DisplayName)), 3)
 
-notify(L(T.WELCOME_AR:format(LP.DisplayName), T.WELCOME_EN:format(LP.DisplayName)), 4)
-
---============[ Main GUI ]============--
+--================= GUI (Main) =================
 local GUI = Instance.new("ScreenGui")
 GUI.Name = "GOV_Main"
 GUI.ResetOnSpawn = false
-GUI.IgnoreGuiInset = true
-GUI.Parent = LP:FindFirstChildOfClass("PlayerGui") or LP:WaitForChild("PlayerGui")
+GUI.Parent = PlayerGui
 
 -- Toggle button (bottom-left)
 local ToggleBtn = Instance.new("TextButton", GUI)
-ToggleBtn.Size = UDim2.fromOffset(160,34)
-ToggleBtn.Position = UDim2.new(0,12,1,-46)
+ToggleBtn.Size = UDim2.fromOffset(150,34)
+ToggleBtn.Position = UDim2.new(0,10,1,-44)
 ToggleBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
 ToggleBtn.TextColor3 = Color3.new(1,1,1)
-ToggleBtn.Text = L(T.SHOWHIDE_AR,T.SHOWHIDE_EN)
 ToggleBtn.Font = Enum.Font.GothamBold
 ToggleBtn.TextSize = 14
+ToggleBtn.Text = L("إظهار/إخفاء (P)","Show/Hide (P)")
 Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0,10)
-local ToggleStroke = Instance.new("UIStroke", ToggleBtn) ToggleStroke.Thickness=1
+local TBStroke = Instance.new("UIStroke", ToggleBtn) TBStroke.Thickness=1
 
 -- Watermark (small, RGB)
 do
-    local wm = Instance.new("TextLabel", GUI)
-    wm.Size = UDim2.fromOffset(220,22)
-    wm.Position = UDim2.new(0,10,1,-22)
-    wm.BackgroundTransparency = 1
-    wm.Font = Enum.Font.Gotham
-    wm.TextSize = 16
-    wm.Text = L(T.FOOT_AR,T.FOOT_EN)
-    local cyc = rgbCycle(0.01)
-    task.spawn(function()
-        while wm.Parent do wm.TextColor3=cyc(); task.wait(0.05) end
-    end)
+	local wm = Instance.new("TextLabel", GUI)
+	wm.Size = UDim2.fromOffset(190,20)
+	wm.Position = UDim2.new(1,-200,1,-24)
+	wm.BackgroundTransparency = 1
+	wm.Font = Enum.Font.Gotham
+	wm.TextSize = 14
+	wm.Text = L("حكومة بيمسي 😁🍷","Gov Bimsy 😁🍷")
+	local cyc = rgbCycle(0.01)
+	task.spawn(function() while wm.Parent do wm.TextColor3 = cyc(); task.wait(0.05) end end)
 end
 
--- Main window
+-- Window
 local Main = Instance.new("Frame", GUI)
-Main.Size = UDim2.fromOffset(650,480)
-Main.Position = UDim2.new(.5,-325,.5,-240)
+Main.Size = UDim2.fromOffset(620, 460)
+Main.Position = UDim2.new(.5,-310,.5,-230)
 Main.BackgroundColor3 = Color3.fromRGB(25,25,25)
 Main.Active = true; Main.Draggable = true
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0,18)
-local MainStroke = Instance.new("UIStroke", Main) MainStroke.Thickness=1.5
-
--- Mild RGB frame stroke (low-cost)
-local cyc1 = rgbCycle(0.004)
-task.spawn(function()
-    while Main.Parent do
-        local c=cyc1()
-        MainStroke.Color=c; ToggleStroke.Color=c
-        task.wait(0.06)
-    end
-end)
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0,16)
+local MainStroke = Instance.new("UIStroke", Main) MainStroke.Thickness = 1.5
+local cycMain = rgbCycle(0.004)
+task.spawn(function() while Main.Parent do MainStroke.Color = cycMain(); TBStroke.Color = MainStroke.Color; task.wait(0.06) end end)
 
 -- Title
 local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1,-20,0,52)
+Title.Size = UDim2.new(1,-20,0,46)
 Title.Position = UDim2.new(0,10,0,8)
 Title.BackgroundTransparency = 1
 Title.Font = Enum.Font.GothamBlack
-Title.TextSize = 22
+Title.TextSize = 20
 Title.TextColor3 = Color3.fromRGB(240,240,240)
-Title.Text = L(T.TITLE_AR, T.TITLE_EN)
+Title.Text = L("👑 سكربت الحكومة المتطور - تحوّلات و نسخ سكن 👑", "👑 Government Advanced - Transforms & Skin 👑")
 
 -- Tabs
 local Tabs = Instance.new("Frame", Main)
 Tabs.Size = UDim2.new(1,-20,0,36)
-Tabs.Position = UDim2.new(0,10,0,60)
+Tabs.Position = UDim2.new(0,10,0,54)
 Tabs.BackgroundTransparency = 1
 local function mkTab(txt, x)
-    local b = Instance.new("TextButton", Tabs)
-    b.Size = UDim2.fromOffset(180,34)
-    b.Position = UDim2.new(0,x,0,0)
-    b.BackgroundColor3 = Color3.fromRGB(38,38,38)
-    b.TextColor3 = Color3.new(1,1,1)
-    b.Font = Enum.Font.GothamSemibold
-    b.TextSize = 14
-    b.Text = txt
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
-    local s = Instance.new("UIStroke", b) s.Thickness=1
-    task.spawn(function()
-        local c=rgbCycle(0.007+ (x%3)*0.001)
-        while b.Parent do s.Color=c(); task.wait(0.07) end
-    end)
-    return b
+	local b = Instance.new("TextButton", Tabs)
+	b.Size = UDim2.fromOffset(190,34)
+	b.Position = UDim2.new(0,x,0,0)
+	b.BackgroundColor3 = Color3.fromRGB(38,38,38)
+	b.TextColor3 = Color3.new(1,1,1)
+	b.Font = Enum.Font.GothamSemibold
+	b.TextSize = 14
+	b.Text = txt
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
+	local s = Instance.new("UIStroke", b) s.Thickness = 1
+	task.spawn(function() local c = rgbCycle(0.007 + (x%3)*0.001) while b.Parent do s.Color = c(); task.wait(0.07) end end)
+	return b
 end
-local Tab1 = mkTab(L(T.TAB_TRANSFORM_AR,T.TAB_TRANSFORM_EN), 0)
-local Tab2 = mkTab(L(T.TAB_COPY_AR,T.TAB_COPY_EN), 200)
-local Tab3 = mkTab(L(T.TAB_UTIL_AR,T.TAB_UTIL_EN), 400)
+local Tab1 = mkTab(L("التحوّلات","Transforms"), 0)
+local Tab2 = mkTab(L("نسخ السكن","Skin Copier"), 205)
+local Tab3 = mkTab(L("أدوات","Utilities"),      410)
 
--- Pages container
+-- Pages
 local Pages = Instance.new("Frame", Main)
 Pages.Size = UDim2.new(1,-20,1,-112)
-Pages.Position = UDim2.new(0,10,0,102)
+Pages.Position = UDim2.new(0,10,0,96)
 Pages.BackgroundColor3 = Color3.fromRGB(18,18,18)
 Instance.new("UICorner", Pages).CornerRadius = UDim.new(0,12)
-
 local function mkPage()
-    local p = Instance.new("ScrollingFrame", Pages)
-    p.Size = UDim2.fromScale(1,1)
-    p.BackgroundTransparency = 1
-    p.CanvasSize = UDim2.new(0,0,0,0)
-    p.ScrollBarThickness = 6
-    p.Visible=false
-    return p
+	local p = Instance.new("ScrollingFrame", Pages)
+	p.Size = UDim2.fromScale(1,1)
+	p.BackgroundTransparency = 1
+	p.CanvasSize = UDim2.new(0,0,0,0)
+	p.ScrollBarThickness = 6
+	p.Visible = false
+	return p
 end
-local P1 = mkPage() -- transforms
-local P2 = mkPage() -- skin copier
-local P3 = mkPage() -- utilities
-
-local function showPage(p)
-    for _,c in ipairs(Pages:GetChildren()) do if c:IsA("ScrollingFrame") then c.Visible=false end end
-    p.Visible=true
-end
-showPage(P1)
-
-Tab1.MouseButton1Click:Connect(function() showPage(P1) end)
-Tab2.MouseButton1Click:Connect(function() showPage(P2) end)
-Tab3.MouseButton1Click:Connect(function() showPage(P3) end)
+local P1, P2, P3 = mkPage(), mkPage(), mkPage()
+local function show(p) for _,c in ipairs(Pages:GetChildren()) do if c:IsA("ScrollingFrame") then c.Visible=false end end p.Visible=true end
+show(P1)
+Tab1.MouseButton1Click:Connect(function() show(P1) end)
+Tab2.MouseButton1Click:Connect(function() show(P2) end)
+Tab3.MouseButton1Click:Connect(function() show(P3) end)
 
 -- Status
 local Status = Instance.new("TextLabel", Main)
@@ -282,208 +242,266 @@ Status.Position = UDim2.new(0,10,1,-30)
 Status.BackgroundTransparency = 1
 Status.Font = Enum.Font.GothamSemibold
 Status.TextSize = 14
-Status.TextColor3 = Color3.fromRGB(220,220,220)
-Status.Text = L(T.STATUS_READY_AR, T.STATUS_READY_EN)
+	Status.TextColor3 = Color3.fromRGB(220,220,220)
+Status.Text = L("جاهز ✅","Ready ✅")
 
--- Toggle show/hide
+-- Toggle
 ToggleBtn.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
-UserInputService.InputBegan:Connect(function(i,g) if not g and i.KeyCode==Enum.KeyCode.P then Main.Visible=not Main.Visible end end)
+UserInputService.InputBegan:Connect(function(i,g) if not g and i.KeyCode==Enum.KeyCode.P then Main.Visible = not Main.Visible end end)
 
---============[ Transform System ]============--
-local function buildTransform(params)
-    local hum = getHumanoid(LP); if not hum then return false end
-    local ok, base = pcall(function() return hum:GetAppliedDescription() end)
-    if not ok or not base then return false end
-
-    -- Scales
-    if params.Height then base.HeightScale = params.Height end
-    if params.Width  then base.WidthScale  = params.Width  end
-    if params.Depth  then base.DepthScale  = params.Depth  end
-    if params.Head   then base.HeadScale   = params.Head   end
-    if params.Body   then base.BodyTypeScale = params.Body end
-    if params.Prop   then base.ProportionScale = params.Prop end
-
-    -- Colors
-    local function setColor(field, c3)
-        base[field.."Color"] = Color3.new(c3.R, c3.G, c3.B)
-    end
-    if params.Color then
-        local C=params.Color
-        setColor("Head",C); setColor("Torso",C)
-        setColor("LeftArm",C); setColor("RightArm",C)
-        setColor("LeftLeg",C); setColor("RightLeg",C)
-    end
-
-    return applyDescription(base)
-end
-
-local Characters = {
-    {AR="سليندر مان",     EN="Slenderman",     P={Height=1.4, Width=0.75, Depth=0.9,  Head=0.9,  Body=0.0, Prop=1.1, Color=Color3.fromRGB(10,10,10)}},
-    {AR="رأس الصراخ",     EN="Siren Head",     P={Height=1.5, Width=0.80, Depth=1.0,  Head=0.7,  Body=0.1, Prop=0.9, Color=Color3.fromRGB(30,30,30)}},
-    {AR="الوحش الظل",     EN="Shadow Monster", P={Height=1.3, Width=0.85, Depth=1.05, Head=0.85, Body=0.0, Prop=1.0, Color=Color3.fromRGB(5,5,5)}},
-    {AR="زومبي",          EN="Zombie",         P={Height=1.0, Width=1.00, Depth=1.00, Head=1.0,  Body=0.3, Prop=1.0, Color=Color3.fromRGB(60,120,60)}},
-    {AR="شيطان أحمر",     EN="Red Demon",      P={Height=1.2, Width=1.05, Depth=1.05, Head=0.95, Body=0.2, Prop=1.0, Color=Color3.fromRGB(140,20,20)}},
-    {AR="هيكل عظمي عملاق",EN="Giant Skeleton", P={Height=1.45,Width=0.85, Depth=0.90, Head=0.85, Body=0.0, Prop=1.0, Color=Color3.fromRGB(220,220,220)}},
-    {AR="المهرج القاتل",  EN="Killer Clown",   P={Height=1.1, Width=1.00, Depth=1.00, Head=1.1,  Body=0.4, Prop=1.0, Color=Color3.fromRGB(230,230,230)}},
-    {AR="وحش البحر",      EN="Sea Monster",    P={Height=1.25,Width=1.10, Depth=1.10, Head=1.0,  Body=0.3, Prop=1.0, Color=Color3.fromRGB(20,80,120)}},
-    {AR="المسخ الأسود",   EN="Dark Mutant",    P={Height=1.2, Width=1.10, Depth=1.15, Head=0.9,  Body=0.2, Prop=1.0, Color=Color3.fromRGB(15,15,15)}},
-    {AR="وحش الجبال",     EN="Mountain Beast", P={Height=1.3, Width=1.20, Depth=1.20, Head=1.0,  Body=0.4, Prop=1.0, Color=Color3.fromRGB(100,80,60)}},
-    {AR="الروح الشريرة",  EN="Evil Spirit",    P={Height=1.35,Width=0.80, Depth=0.90, Head=0.8,  Body=0.0, Prop=1.1, Color=Color3.fromRGB(240,240,255)}},
-    {AR="الغول العملاق",  EN="Ogre Giant",     P={Height=1.4, Width=1.25, Depth=1.25, Head=1.1,  Body=0.7, Prop=0.9, Color=Color3.fromRGB(80,140,80)}},
-    {AR="الزاحف الليلي",  EN="Night Crawler",  P={Height=1.2, Width=0.90, Depth=1.05, Head=0.9,  Body=0.1, Prop=1.0, Color=Color3.fromRGB(20,20,40)}},
-    {AR="المستذئب",       EN="Werewolf",       P={Height=1.25,Width=1.15, Depth=1.10, Head=1.0,  Body=0.5, Prop=1.0, Color=Color3.fromRGB(90,70,50)}},
-    {AR="مومياء",         EN="Mummy",          P={Height=1.1, Width=1.00, Depth=1.00, Head=1.0,  Body=0.2, Prop=1.0, Color=Color3.fromRGB(230,220,200)}},
-    {AR="القاتل المقنع",  EN="Masked Killer",  P={Height=1.15,Width=1.00, Depth=1.00, Head=1.0,  Body=0.3, Prop=1.0, Color=Color3.fromRGB(35,35,35)}},
-    {AR="وحش النيران",    EN="Fire Monster",   P={Height=1.2, Width=1.05, Depth=1.05, Head=1.0,  Body=0.4, Prop=1.0, Color=Color3.fromRGB(200,70,30)}},
-    {AR="شبح أبيض",       EN="White Ghost",    P={Height=1.25,Width=0.85, Depth=0.90, Head=0.9,  Body=0.0, Prop=1.1, Color=Color3.fromRGB(245,245,245)}},
-    {AR="التنين الأسود",  EN="Black Dragon",   P={Height=1.35,Width=1.10, Depth=1.10, Head=0.95, Body=0.6, Prop=1.0, Color=Color3.fromRGB(10,10,10)}},
-    {AR="الدمية المرعبة", EN="Creepy Doll",    P={Height=0.9, Width=0.90, Depth=0.90, Head=1.2,  Body=0.4, Prop=1.0, Color=Color3.fromRGB(240,220,220)}},
+--================= TRANSFORMS (20 presets) =================
+local Presets = {
+	{AR="سليندر مان",     EN="Slenderman",     P={H=1.35,W=.78,D=.92,  HS=.95, B=0.0, PR=1.05, C=Color3.fromRGB(10,10,10)}},
+	{AR="رأس الصراخ",     EN="Siren Head",     P={H=1.45,W=.82,D=1.0,  HS=.8,  B=0.1, PR=.95,  C=Color3.fromRGB(30,30,30)}},
+	{AR="الوحش الظل",     EN="Shadow Monster", P={H=1.28,W=.86,D=1.02, HS=.9,  B=0.0, PR=1.0,  C=Color3.fromRGB(5,5,5)}},
+	{AR="زومبي",          EN="Zombie",         P={H=1.0, W=1.0,D=1.0,  HS=1.0, B=.3,  PR=1.0,  C=Color3.fromRGB(60,120,60)}},
+	{AR="شيطان أحمر",     EN="Red Demon",      P={H=1.18,W=1.05,D=1.05,HS=.95, B=.2,  PR=1.0,  C=Color3.fromRGB(140,20,20)}},
+	{AR="هيكل عظمي عملاق",EN="Giant Skeleton", P={H=1.40,W=.86,D=.92, HS=.88, B=0.0, PR=1.0,  C=Color3.fromRGB(220,220,220)}},
+	{AR="المهرج القاتل",  EN="Killer Clown",   P={H=1.1, W=1.0,D=1.0,  HS=1.1, B=.4,  PR=1.0,  C=Color3.fromRGB(230,230,230)}},
+	{AR="وحش البحر",      EN="Sea Monster",    P={H=1.22,W=1.08,D=1.1, HS=1.0, B=.3,  PR=1.0,  C=Color3.fromRGB(20,80,120)}},
+	{AR="المسخ الأسود",   EN="Dark Mutant",    P={H=1.18,W=1.08,D=1.14,HS=.9,  B=.2,  PR=1.0,  C=Color3.fromRGB(15,15,15)}},
+	{AR="وحش الجبال",     EN="Mountain Beast", P={H=1.26,W=1.18,D=1.18,HS=1.0, B=.4,  PR=1.0,  C=Color3.fromRGB(100,80,60)}},
+	{AR="الروح الشريرة",  EN="Evil Spirit",    P={H=1.32,W=.82,D=.9,  HS=.84, B=0.0, PR=1.08, C=Color3.fromRGB(240,240,255)}},
+	{AR="الغول العملاق",  EN="Ogre Giant",     P={H=1.36,W=1.22,D=1.22,HS=1.08,B=.7,  PR=.92, C=Color3.fromRGB(80,140,80)}},
+	{AR="الزاحف الليلي",  EN="Night Crawler",  P={H=1.2, W=.9, D=1.04,HS=.9,  B=.1,  PR=1.0,  C=Color3.fromRGB(20,20,40)}},
+	{AR="المستذئب",       EN="Werewolf",       P={H=1.23,W=1.14,D=1.1, HS=1.0, B=.5,  PR=1.0,  C=Color3.fromRGB(90,70,50)}},
+	{AR="مومياء",         EN="Mummy",          P={H=1.1, W=1.0,D=1.0,  HS=1.0, B=.2,  PR=1.0,  C=Color3.fromRGB(230,220,200)}},
+	{AR="القاتل المقنع",  EN="Masked Killer",  P={H=1.14,W=1.0,D=1.0,  HS=1.0, B=.3,  PR=1.0,  C=Color3.fromRGB(35,35,35)}},
+	{AR="وحش النيران",    EN="Fire Monster",   P={H=1.2, W=1.04,D=1.04,HS=1.0, B=.4,  PR=1.0,  C=Color3.fromRGB(200,70,30)}},
+	{AR="شبح أبيض",       EN="White Ghost",    P={H=1.24,W=.84,D=.9,  HS=.9,  B=0.0, PR=1.08, C=Color3.fromRGB(245,245,245)}},
+	{AR="التنين الأسود",  EN="Black Dragon",   P={H=1.30,W=1.08,D=1.08,HS=.95, B=.6,  PR=1.0,  C=Color3.fromRGB(10,10,10)}},
+	{AR="الدمية المرعبة", EN="Creepy Doll",    P={H=.92, W=.9, D=.9,  HS=1.18,B=.4,  PR=1.0,  C=Color3.fromRGB(240,220,220)}},
 }
 
-do
-    local pad = Instance.new("UIPadding", P1) pad.PaddingLeft=UDim.new(0,10) pad.PaddingTop=UDim.new(0,10)
-    local grid = Instance.new("UIGridLayout", P1)
-    grid.CellPadding = UDim2.fromOffset(10,10)
-    grid.CellSize = UDim2.new(0,300,0,40)
-
-    for i,char in ipairs(Characters) do
-        local btn = Instance.new("TextButton", P1)
-        btn.BackgroundColor3 = Color3.fromRGB(36,36,36)
-        btn.TextColor3 = Color3.new(1,1,1)
-        btn.Font = Enum.Font.GothamSemibold
-        btn.TextSize = 16
-        btn.Text = (Lang=="AR" and char.AR or char.EN)
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0,10)
-        local s = Instance.new("UIStroke", btn) s.Thickness=1
-
-        btn.MouseButton1Click:Connect(function()
-            local ok = buildTransform(char.P)
-            if ok then
-                Status.Text = (Lang=="AR") and (T.TRANSFORM_OK_AR..char.AR) or (T.TRANSFORM_OK_EN..char.EN)
-                TweenService:Create(btn, TweenInfo.new(.12), {BackgroundColor3=Color3.fromRGB(60,60,90)}):Play()
-                safeWait(.15)
-                TweenService:Create(btn, TweenInfo.new(.2), {BackgroundColor3=Color3.fromRGB(36,36,36)}):Play()
-            else
-                Status.Text = L(T.TRANSFORM_FAIL_AR,T.TRANSFORM_FAIL_EN)
-            end
-        end)
-
-        task.spawn(function()
-            local c=rgbCycle(0.008+(i%5)*0.001)
-            while s.Parent do s.Color=c(); task.wait(0.06) end
-        end)
-    end
-end
-
---============[ Skin Copier ]============--
-local function copySkinByPrefix(prefix)
-    if not prefix or #prefix<2 or #prefix>20 then return false,"short" end
-    prefix = prefix:lower()
-    local target
-    for _,p in ipairs(Players:GetPlayers()) do
-        local dn = (p.DisplayName or p.Name):lower()
-        if dn:sub(1,#prefix)==prefix or p.Name:lower():sub(1,#prefix)==prefix then target=p break end
-    end
-    if not target or target==LP then return false,"notfound" end
-    local desc = getAppliedDescriptionOf(target)
-    if not desc then return false,"nohum" end
-    local ok,err = applyDescription(desc)
-    return ok, err or "ok"
+local function applyPreset(P)
+	local base = getCurrentDescription()
+	if not base then return false end
+	local d = cloneDescription(base)
+	if not d then return false end
+	if P.H  then d.HeightScale     = P.H  end
+	if P.W  then d.WidthScale      = P.W  end
+	if P.D  then d.DepthScale      = P.D  end
+	if P.HS then d.HeadScale       = P.HS end
+	if P.B  then d.BodyTypeScale   = P.B  end
+	if P.PR then d.ProportionScale = P.PR end
+	if P.C  then setAllBodyColors(d, P.C) end
+	return safeApplyDescription(d)
 end
 
 do
-    local label = Instance.new("TextLabel", P2)
-    label.Size = UDim2.new(1,-20,0,28)
-    label.Position = UDim2.new(0,10,0,10)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.GothamSemibold
-    label.TextSize = 16
-    label.TextColor3 = Color3.fromRGB(230,230,230)
-    label.Text = L(T.COPYLABEL_AR,T.COPYLABEL_EN)
+	local pad = Instance.new("UIPadding", P1)
+	pad.PaddingLeft  = UDim.new(0,10)
+	pad.PaddingTop   = UDim.new(0,10)
+	local grid = Instance.new("UIGridLayout", P1)
+	grid.CellPadding = UDim2.fromOffset(10,10)
+	grid.CellSize    = UDim2.new(0,290,0,38)
 
-    local box = Instance.new("TextBox", P2)
-    box.Size = UDim2.new(1,-20,0,36)
-    box.Position = UDim2.new(0,10,0,42)
-    box.BackgroundColor3 = Color3.fromRGB(34,34,34)
-    box.TextColor3 = Color3.new(1,1,1)
-    box.PlaceholderText = (Lang=="AR") and "اكتب أول 2-5 حروف" or "Type first 2–5 letters"
-    box.Font = Enum.Font.Gotham
-    box.TextSize = 16
-    box.ClearTextOnFocus = false
-    Instance.new("UICorner", box).CornerRadius = UDim.new(0,10)
+	for i,data in ipairs(Presets) do
+		local B = Instance.new("TextButton", P1)
+		B.BackgroundColor3 = Color3.fromRGB(36,36,36)
+		B.TextColor3 = Color3.new(1,1,1)
+		B.Font = Enum.Font.GothamSemibold
+		B.TextSize = 14
+		B.Text = (Lang=="AR") and data.AR or data.EN
+		Instance.new("UICorner", B).CornerRadius = UDim.new(0,10)
+		local s = Instance.new("UIStroke", B) s.Thickness = 1
+		task.spawn(function() local c = rgbCycle(0.008+(i%5)*0.001) while s.Parent do s.Color = c(); task.wait(0.06) end end)
 
-    local btn = Instance.new("TextButton", P2)
-    btn.Size = UDim2.new(0,160,0,36)
-    btn.Position = UDim2.new(0,10,0,88)
-    btn.BackgroundColor3 = Color3.fromRGB(52,52,90)
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.Text = L(T.COPYBTN_AR,T.COPYBTN_EN)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 16
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,10)
-
-    btn.MouseButton1Click:Connect(function()
-        local txt = (box.Text or ""):gsub("%s+","")
-        local ok,why = copySkinByPrefix(txt)
-        if ok then
-            Status.Text = L(T.STATUS_COPIED_AR,T.STATUS_COPIED_EN)
-            notify(L("تم نسخ السكن ✅","Skin copied ✅"),2.5)
-        else
-            if why=="notfound" then
-                Status.Text = L(T.STATUS_NOTFOUND_AR,T.STATUS_NOTFOUND_EN)
-            else
-                Status.Text = (Lang=="AR") and "فشل النسخ ❌" or "Copy failed ❌"
-            end
-        end
-    end)
+		B.MouseButton1Click:Connect(function()
+			if applyPreset(data.P) then
+				Status.Text = L("تم التحوّل إلى: ","Transformed to: ") .. ((Lang=="AR") and data.AR or data.EN) .. " ✅"
+			else
+				Status.Text = L("تعذر التحوّل ❌","Transform failed ❌")
+			end
+		end)
+	end
 end
 
---============[ Utilities ]============--
+--================= SKIN COPIER (prefix + avatar) =================
+local AvatarImg
+local NameBox
+
+local function findPlayerByPrefix(prefix)
+	if not prefix or #prefix < 2 then return nil end
+	prefix = prefix:lower()
+	for _,p in ipairs(Players:GetPlayers()) do
+		local n1 = (p.DisplayName or ""):lower()
+		local n2 = (p.Name or ""):lower()
+		if n1:sub(1,#prefix)==prefix or n2:sub(1,#prefix)==prefix then
+			return p
+		end
+	end
+	return nil
+end
+
+local function copyFromPrefix(prefix)
+	local target = findPlayerByPrefix(prefix)
+	if not target or target == LP then return false, "notfound" end
+	local ok1, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(target.UserId) end)
+	if not ok1 or not desc then return false, "desc" end
+	local ok2 = safeApplyDescription(desc)
+	if not ok2 then return false, "apply" end
+	if AvatarImg then
+		local ok3, url, ready = pcall(function()
+			local u, r = Players:GetUserThumbnailAsync(target.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
+			return u, r
+		end)
+		if ok3 then AvatarImg.Image = url end
+	end
+	return true, "ok"
+end
+
 do
-    local rejoin = Instance.new("TextButton", P3)
-    rejoin.Size = UDim2.new(0,220,0,40)
-    rejoin.Position = UDim2.new(0,10,0,10)
-    rejoin.BackgroundColor3 = Color3.fromRGB(58,58,58)
-    rejoin.TextColor3 = Color3.new(1,1,1)
-    rejoin.Font = Enum.Font.GothamBold
-    rejoin.TextSize = 16
-    rejoin.Text = L(T.REJOIN_AR,T.REJOIN_EN)
-    Instance.new("UICorner", rejoin).CornerRadius = UDim.new(0,10)
-    rejoin.MouseButton1Click:Connect(function()
-        notify(L("جاري إعادة الدخول…","Rejoining…"),2)
-        local TeleportService = game:GetService("TeleportService")
-        pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
-        end)
-    end)
+	local pad = Instance.new("UIPadding", P2)
+	pad.PaddingLeft = UDim.new(0,10)
+	pad.PaddingTop  = UDim.new(0,10)
+
+	local Lbl = Instance.new("TextLabel", P2)
+	Lbl.Size = UDim2.new(1,-20,0,24)
+	Lbl.BackgroundTransparency = 1
+	Lbl.Font = Enum.Font.GothamSemibold
+	Lbl.TextSize = 14
+	Lbl.TextColor3 = Color3.fromRGB(230,230,230)
+	Lbl.Text = L("اكتب أول 2-5 حروف من اسم اللاعب:","Type first 2–5 letters of player name:")
+
+	NameBox = Instance.new("TextBox", P2)
+	NameBox.Size = UDim2.new(0,260,0,36)
+	NameBox.Position = UDim2.new(0,0,0,28)
+	NameBox.BackgroundColor3 = Color3.fromRGB(34,34,34)
+	NameBox.TextColor3 = Color3.new(1,1,1)
+	NameBox.PlaceholderText = L("مثال: abo / ah","e.g. abo / ah")
+	NameBox.Font = Enum.Font.Gotham; NameBox.TextSize = 16
+	NameBox.ClearTextOnFocus = false
+	Instance.new("UICorner", NameBox).CornerRadius = UDim.new(0,10)
+
+	local Btn = Instance.new("TextButton", P2)
+	Btn.Size = UDim2.new(0,140,0,36)
+	Btn.Position = UDim2.new(0,270,0,28)
+	Btn.BackgroundColor3 = Color3.fromRGB(52,52,90)
+	Btn.TextColor3 = Color3.new(1,1,1)
+	Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 16
+	Btn.Text = L("نسخ الآن","Copy Now")
+	Instance.new("UICorner", Btn).CornerRadius = UDim.new(0,10)
+
+	AvatarImg = Instance.new("ImageLabel", P2)
+	AvatarImg.Size = UDim2.new(0,100,0,100)
+	AvatarImg.Position = UDim2.new(0,0,0,74)
+	AvatarImg.BackgroundColor3 = Color3.fromRGB(28,28,28)
+	AvatarImg.ScaleType = Enum.ScaleType.Fit
+	Instance.new("UICorner", AvatarImg).CornerRadius = UDim.new(0,10)
+
+	local info = Instance.new("TextLabel", P2)
+	info.Size = UDim2.new(1,-20,0,22)
+	info.Position = UDim2.new(0,0,0,182)
+	info.BackgroundTransparency = 1
+	info.Font = Enum.Font.Gotham
+	info.TextSize = 12
+	info.TextColor3 = Color3.fromRGB(200,200,200)
+	info.Text = L("تلميح: يفضّل أن تكتب 3-4 حروف لتحديد اللاعب الصحيح.","Hint: Use 3-4 letters for better match.")
+
+	Btn.MouseButton1Click:Connect(function()
+		local txt = (NameBox.Text or ""):gsub("%s+","")
+		if #txt < 2 then
+			Status.Text = L("اكتب 2 حروف على الأقل ❗","Type at least 2 letters ❗")
+			return
+		end
+		local ok, why = copyFromPrefix(txt)
+		if ok then
+			Status.Text = L("تم النسخ ✅","Copied ✅")
+			notify(L("تم نسخ سكن اللاعب ✅","Player skin copied ✅"), 2)
+		else
+			if why=="notfound" then
+				Status.Text = L("لاعب غير موجود ❌","Player not found ❌")
+			else
+				Status.Text = L("فشل النسخ ❌","Copy failed ❌")
+			end
+		end
+	end)
 end
 
---============[ Splash (light) ]============--
+--================= UTILITIES (Rejoin + Reset to Default) =================
 do
-    local splash = Instance.new("Frame", Main)
-    splash.Size = UDim2.new(1,0,1,0)
-    splash.BackgroundColor3 = Color3.fromRGB(10,10,10)
-    splash.BackgroundTransparency = .15
-    splash.ZIndex = 3
-    Instance.new("UICorner", splash).CornerRadius = UDim.new(0,18)
+	local y = 10
 
-    local txt = Instance.new("TextLabel", splash)
-    txt.Size = UDim2.new(1,0,0,64)
-    txt.Position = UDim2.new(0,0,.45,-32)
-    txt.BackgroundTransparency = 1
-    txt.Font = Enum.Font.GothamBlack
-    txt.TextSize = 28
-    txt.TextColor3 = Color3.fromRGB(255,255,255)
-    txt.TextWrapped = true
-    txt.Text = L(("منوّر يا %s ✨\nسكربت الحكومة المتطور لنسخ السكنات والتحوّلات 😁🍷"):format(LP.DisplayName),
-                  ("Welcome %s ✨\nGovernment Advanced Transform & Skin Script 😁🍷"):format(LP.DisplayName))
-    local cyc = rgbCycle(0.008)
-    task.spawn(function()
-        for i=1,40 do txt.TextColor3=cyc(); task.wait(0.05) end
-    end)
-    TweenService:Create(splash, TweenInfo.new(.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 1.4), {BackgroundTransparency=1}):Play()
-    safeWait(1.6); splash:Destroy()
+	local Rejoin = Instance.new("TextButton", P3)
+	Rejoin.Size = UDim2.new(0,220,0,40)
+	Rejoin.Position = UDim2.new(0,10,0,y)
+	Rejoin.BackgroundColor3 = Color3.fromRGB(58,58,58)
+	Rejoin.TextColor3 = Color3.new(1,1,1)
+	Rejoin.Font = Enum.Font.GothamBold
+	Rejoin.TextSize = 16
+	Rejoin.Text = L("إعادة دخول السيرفر","Rejoin Same Server")
+	Instance.new("UICorner", Rejoin).CornerRadius = UDim.new(0,10)
+	y = y + 50
+
+	Rejoin.MouseButton1Click:Connect(function()
+		Status.Text = L("جاري إعادة الدخول…","Rejoining…")
+		local ok = pcall(function()
+			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+		end)
+		if not ok then
+			TeleportService:Teleport(game.PlaceId, LP)
+		end
+	end)
+
+	local ResetBtn = Instance.new("TextButton", P3)
+	ResetBtn.Size = UDim2.new(0,220,0,40)
+	ResetBtn.Position = UDim2.new(0,10,0,y)
+	ResetBtn.BackgroundColor3 = Color3.fromRGB(58,58,58)
+	ResetBtn.TextColor3 = Color3.new(1,1,1)
+	ResetBtn.Font = Enum.Font.GothamBold
+	ResetBtn.TextSize = 16
+	ResetBtn.Text = L("رجوع للمظهر الحالي","Re-apply Current Look")
+	Instance.new("UICorner", ResetBtn).CornerRadius = UDim.new(0,10)
+	y = y + 50
+
+	ResetBtn.MouseButton1Click:Connect(function()
+		local d = getCurrentDescription()
+		if d then
+			safeApplyDescription(d)
+			Status.Text = L("تمت الإعادة ✅","Re-applied ✅")
+		else
+			Status.Text = L("لا يوجد وصف حالي ❌","No current description ❌")
+		end
+	end)
+
+	local Hint = Instance.new("TextLabel", P3)
+	Hint.Size = UDim2.new(1,-20,0,40)
+	Hint.Position = UDim2.new(0,10,0,y)
+	Hint.BackgroundTransparency = 1
+	Hint.Font = Enum.Font.Gotham
+	Hint.TextSize = 12
+	Hint.TextColor3 = Color3.fromRGB(200,200,200)
+	Hint.TextWrapped = true
+	Hint.Text = L("ملاحظة: بعض الألعاب قد تمنع التغييرات. لو زر النسخ/التحول ماشتغلش جرّب تاني.","Note: Some experiences may restrict changes. If copy/transform fails, try again.")
 end
 
--- Done
+--================= Splash (small) =================
+do
+	local Splash = Instance.new("Frame", Main)
+	Splash.Size = UDim2.fromScale(1,1)
+	Splash.BackgroundColor3 = Color3.fromRGB(10,10,10)
+	Splash.BackgroundTransparency = .1
+	Splash.ZIndex = 3
+	Instance.new("UICorner", Splash).CornerRadius = UDim.new(0,16)
+
+	local Txt = Instance.new("TextLabel", Splash)
+	Txt.BackgroundTransparency = 1
+	Txt.Size = UDim2.new(1,0,0,60)
+	Txt.Position = UDim2.new(0,0,.44,-30)
+	Txt.Font = Enum.Font.GothamBlack
+	Txt.TextSize = 24
+	Txt.TextColor3 = Color3.fromRGB(255,255,255)
+	Txt.TextWrapped = true
+	Txt.Text = L(("منوّر يا %s ✨\nسكربت الحكومة لتحوّلات ونسخ السكن 😁🍷"):format(LP.DisplayName),
+	              ("Welcome %s ✨\nGovernment Transform & Skin 😁🍷"):format(LP.DisplayName))
+	local cyc = rgbCycle(0.01)
+	task.spawn(function() for _=1,40 do Txt.TextColor3 = cyc(); task.wait(0.05) end end)
+	TweenService:Create(Splash, TweenInfo.new(.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 1.2), {BackgroundTransparency=1}):Play()
+	task.wait(1.3)
+	Splash:Destroy()
+end
+
 print("✅ Government Script Loaded - حقوق العم حكومه 😁🍷")
+--========================================================--
+```0
