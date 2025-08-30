@@ -1,112 +1,123 @@
---// سكربت التحولات المرعبة - حقوق العم حكومه 😁🍷
+-- سكربت التحولات مع حقوق العم حكومه 😁🍷
 
 -- خدمات Roblox
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
+-- إنشاء واجهة
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
 
--- دالة التحول
+-- زرار فتح/قفل
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Parent = ScreenGui
+ToggleButton.Size = UDim2.new(0,100,0,40)
+ToggleButton.Position = UDim2.new(0,10,0,10)
+ToggleButton.Text = "القائمة"
+ToggleButton.BackgroundColor3 = Color3.fromRGB(50,50,50)
+ToggleButton.TextColor3 = Color3.fromRGB(255,255,255)
+
+-- فريم القائمة
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = ScreenGui
+MainFrame.Size = UDim2.new(0,300,0,400)
+MainFrame.Position = UDim2.new(0.5,-150,0.5,-200)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+MainFrame.Visible = false
+
+-- حقوق العم حكومه 😁🍷
+local Rights = Instance.new("TextLabel")
+Rights.Parent = ScreenGui
+Rights.Size = UDim2.new(1,0,0,30)
+Rights.Position = UDim2.new(0,0,1,-30)
+Rights.Text = "حقوق العم حكومه 😁🍷"
+Rights.TextScaled = true
+Rights.BackgroundTransparency = 1
+Rights.TextColor3 = Color3.fromRGB(255,0,0)
+
+-- الوان متغيرة (RGB)
+task.spawn(function()
+    local hue = 0
+    while true do
+        hue = (hue + 0.01) % 1
+        Rights.TextColor3 = Color3.fromHSV(hue,1,1)
+        task.wait(0.05)
+    end
+end)
+
+-- حفظ الشخصية الأصلية
+local OriginalDescription = Players:GetHumanoidDescriptionFromUserId(LocalPlayer.UserId)
+
+-- دالة للتحول
 local function MorphTo(userId)
-    local humanoidDescription = Players:GetHumanoidDescriptionFromUserId(userId)
-    if humanoidDescription then
-        character.Humanoid:ApplyDescription(humanoidDescription)
+    local success, desc = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(userId)
+    end)
+    if success and desc then
+        Character.Humanoid:ApplyDescription(desc)
+    else
+        warn("ماقدرش يجيب التحول")
     end
 end
 
--- واجهة
-local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 400, 0, 500)
-mainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-mainFrame.BorderSizePixel = 3
-mainFrame.Active = true
-mainFrame.Draggable = true
-
--- عنوان واجهة
-local title = Instance.new("TextLabel", mainFrame)
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-title.Text = "⚡ سكربت التحولات المرعبة ⚡"
-title.TextColor3 = Color3.fromRGB(255, 0, 0)
-title.Font = Enum.Font.Fantasy
-title.TextSize = 22
-
--- قائمة الشخصيات المرعبة
-local characters = {
-    {Name = "👻 سلندر مان", UserId = 22612059},
-    {Name = "🔪 جيسون", UserId = 77378689},
-    {Name = "🩸 فريدي كروجر", UserId = 26422347},
-    {Name = "🕷️ زومبي أسود", UserId = 45375092},
-    {Name = "💀 هيكل عظمي", UserId = 14592711},
-    {Name = "👹 وحش ضخم", UserId = 93837422},
-    {Name = "🧟 زومبي عادي", UserId = 45370921},
-    {Name = "👿 شيطان أحمر", UserId = 83274933},
-    {Name = "🎃 هالوين", UserId = 17493288},
-    {Name = "🪓 قاتل مجنون", UserId = 55392014},
-    {Name = "🧛 مصاص دماء", UserId = 23458992},
-    {Name = "🧟‍♀️ زومبي بنت", UserId = 67738291},
-    {Name = "👺 قناع مرعب", UserId = 17293044},
-    {Name = "🧞 جني مظلم", UserId = 18839202},
-    {Name = "👾 وحش غريب", UserId = 90392022},
-    {Name = "💀 شبح أسود", UserId = 32450922},
-    {Name = "👹 أوجر ضخم", UserId = 54920291},
-    {Name = "👽 فضائي مرعب", UserId = 76492013},
-    {Name = "🪦 شبح مقبرة", UserId = 32948291},
-    {Name = "🧟‍♂️ زومبي متحلل", UserId = 12837491},
-    {Name = "🔥 جمجمة نار", UserId = 56293812},
-    {Name = "👹 وحش الظل", UserId = 45619283},
-    {Name = "🕷️ عنكبوت بشري", UserId = 19823719},
-    {Name = "👻 شبح أبيض", UserId = 23817293},
-    {Name = "💀 هيكل محترق", UserId = 45023981},
+-- أزرار الشخصيات
+local Characters = {
+    {"Slenderman",  23309932}, 
+    {"Monster",     74669399}, 
+    {"Zombie",      83013256}, 
+    {"Giant",       74669463}, 
+    {"Demon",       74669410}, 
+    {"Dragon",      83013400}, 
+    {"Alien",       74669555}, 
+    {"Robot",       83013521}, 
+    {"Skeleton",    74669600}, 
+    {"Shadow",      74669650}, 
+    {"Vampire",     83013612}, 
+    {"Werewolf",    74669730}, 
+    {"DarkKnight",  74669800}, 
+    {"Reaper",      83013733}, 
+    {"Beast",       74669900}, 
+    {"Titan",       83013844}, 
+    {"Phantom",     74670000}, 
+    {"Ghoul",       74670100}, 
+    {"Wraith",      83013955}, 
+    {"Ogre",        74670200}, 
+    {"Devil",       74670300}, 
+    {"AngelOfDeath",74670400}, 
+    {"Mutant",      83014066}, 
+    {"Cyclops",     74670500}, 
+    {"Slayer",      74670600}
 }
 
--- صنع أزرار التحول
-local layout = Instance.new("UIListLayout", mainFrame)
-layout.Padding = UDim.new(0, 5)
-layout.FillDirection = Enum.FillDirection.Vertical
-
-for _, charData in ipairs(characters) do
-    local button = Instance.new("TextButton", mainFrame)
-    button.Size = UDim2.new(1, -10, 0, 25)
-    button.Position = UDim2.new(0, 5, 0, 0)
-    button.Text = charData.Name
-    button.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.Font = Enum.Font.Fantasy
-    button.TextSize = 18
-
-    button.MouseButton1Click:Connect(function()
-        MorphTo(charData.UserId)
+for i,data in ipairs(Characters) do
+    local btn = Instance.new("TextButton")
+    btn.Parent = MainFrame
+    btn.Size = UDim2.new(0,130,0,30)
+    btn.Position = UDim2.new(0,(i%2==0) and 150 or 10,0,((math.floor((i-1)/2))*35)+10)
+    btn.Text = "تحول: "..data[1]
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.MouseButton1Click:Connect(function()
+        MorphTo(data[2])
     end)
 end
 
--- زر العودة للشكل الأصلي
-local resetBtn = Instance.new("TextButton", mainFrame)
-resetBtn.Size = UDim2.new(1, -10, 0, 25)
-resetBtn.Text = "🔄 رجوع للشكل الأصلي"
-resetBtn.BackgroundColor3 = Color3.fromRGB(0, 50, 0)
-resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-resetBtn.Font = Enum.Font.SourceSansBold
-resetBtn.TextSize = 18
-
-resetBtn.MouseButton1Click:Connect(function()
-    player:LoadCharacter()
+-- زرار الرجوع
+local back = Instance.new("TextButton")
+back.Parent = MainFrame
+back.Size = UDim2.new(0,280,0,30)
+back.Position = UDim2.new(0,10,1,-40)
+back.Text = "رجوع للشخصية الأصلية"
+back.BackgroundColor3 = Color3.fromRGB(80,0,0)
+back.TextColor3 = Color3.fromRGB(255,255,255)
+back.MouseButton1Click:Connect(function()
+    Character.Humanoid:ApplyDescription(OriginalDescription)
 end)
 
--- حقوق العم حكومه 😁🍷 RGB
-local credit = Instance.new("TextLabel", mainFrame)
-credit.Size = UDim2.new(1, 0, 0, 30)
-credit.Position = UDim2.new(0, 0, 1, -30)
-credit.BackgroundTransparency = 1
-credit.Font = Enum.Font.Fantasy
-credit.TextSize = 20
-credit.Text = "حقوق العم حكومه 😁🍷"
-
-task.spawn(function()
-    while task.wait(0.2) do
-        credit.TextColor3 = Color3.fromRGB(math.random(0,255), math.random(0,255), math.random(0,255))
-    end
+-- تشغيل وفتح/قفل
+ToggleButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
 end)
