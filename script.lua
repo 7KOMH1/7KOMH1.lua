@@ -1,520 +1,545 @@
 --[[
-    الحقوق: GS4 | العم حكومه 🍷
-    نسخة عربية مطوّرة (حوالي 540 سطر)
-    - 4 تتبعات (2×2)
-    - التقاط سريع جدًا من أول حرفين لأي جزء بالاسم أو اللقب
-    - عربي كامل (واجهة/نصوص)
-    - إظهار (اسم المستخدم + اللقب) بعد الالتقاط فقط (بدون إيموجي في العناوين)
-    - صورة بروفايل
-    - عدادات دخول/خروج
-    - مؤشر حالة (نقطة خضراء/رمادية)
-    - إشعارات وصوت دخول/خروج
-    - وقت بداية التتبع + مدة التتبع حيًا
-    - زر فتح/قفل صغير وقابل للسحب
-    - تسجيل جلسة في الذاكرة (سجل بسيط)
---]]
 
---========================= الخدمات =========================
+    GS4 | العم حكومه 🍷
+    نسخة تتبع 4 لاعبين — قوية / واجهة عربية / التقاط فوري / صوت دخول-خروج
+    ملاحظات:
+      - اكتب أول حرفين أو أكثر من "اسم المستخدم" أو "اللقب" داخل كل خانة
+      - عند مسح الحقل بالكامل → يتلغى التتبع للخانة
+      - الخانات مرتبة 2×2 مع صورة بروفايل تظهر بعد تحديد لاعب فقط
+      - زر فتح/قفل صغير ومتحرك
+      - يتم حساب مرات الدخول/الخروج الحقيقية عبر PlayerAdded/PlayerRemoving
+      - السجل محفوظ في _G.GS4_TRACK_HISTORY طول الجلسة
+      - الألوان: خلفية داكنة، عناوين زرقاء، دخول أخضر، خروج أحمر
+
+]]--
+
+-- =========[ خدمات Roblox ]=========
 local Players        = game:GetService("Players")
-local TweenService   = game:GetService("TweenService")
-local SoundService   = game:GetService("SoundService")
+local HttpService    = game:GetService("HttpService")
 local RunService     = game:GetService("RunService")
+local StarterGui     = game:GetService("StarterGui")
 local CoreGui        = game:GetService("CoreGui")
+local TweenService   = game:GetService("TweenService")
+local UserInput      = game:GetService("UserInputService")
+local Localization   = game:GetService("LocalizationService")
+local ContentProvider= game:GetService("ContentProvider")
 
 local LP = Players.LocalPlayer
 
---========================= إعدادات عامة =====================
+-- =========[ ثيم وأصول ]=========
 local THEME = {
-    bg           = Color3.fromRGB(14,14,14),
-    panel        = Color3.fromRGB(22,22,22),
-    field        = Color3.fromRGB(40,40,40),
-    line         = Color3.fromRGB(36,36,36),
-    text         = Color3.fromRGB(235,235,235),
-    blue         = Color3.fromRGB(0,170,255),
-    blue2        = Color3.fromRGB(0,145,255),
-    cyan         = Color3.fromRGB(0,200,200),
-    green        = Color3.fromRGB(0,255,0),
-    red          = Color3.fromRGB(255,0,0),
-    notifBG      = Color3.fromRGB(22,22,22),
-    toggleBG     = Color3.fromRGB(18,18,18),
-    onlineDot    = Color3.fromRGB(60,200,90),
-    offlineDot   = Color3.fromRGB(120,120,120),
+    bg           = Color3.fromRGB(18,18,18),
+    panel        = Color3.fromRGB(25,25,25),
+    header       = Color3.fromRGB(32,32,32),
+    stroke       = Color3.fromRGB(60,60,60),
+    text         = Color3.fromRGB(230,230,230),
+    midText      = Color3.fromRGB(180,180,180),
+    blue         = Color3.fromRGB(60,170,255),
+    green        = Color3.fromRGB(70,220,100),
+    red          = Color3.fromRGB(255,70,70),
+    amber        = Color3.fromRGB(255,190,60),
+    onlineDot    = Color3.fromRGB(60, 220, 100),
+    offlineDot   = Color3.fromRGB(160, 160, 160),
+    searchBox    = Color3.fromRGB(44,44,44)
 }
 
--- يمكن تعديل هذه القيم لو عايز الواجهة أكبر/أصغر
-local UI_SIZE = Vector2.new(560, 360)     -- حجم اللوحة
-local CARD_H  = 154                       -- ارتفاع الكارت
-local FONT_H1 = 22
-local FONT_H2 = 18
-local FONT_H3 = 17
-local SEARCH_DEBOUNCE = 0.10              -- لتخفيف البحث الفوري
+-- أصوات
+local SFX = {
+    Join  = "rbxassetid://138081500",    -- Ping
+    Leave = "rbxassetid://138081519",    -- Click/leave
+}
 
---========================= أصوات ===========================
-local SndJoin = Instance.new("Sound", SoundService)
-SndJoin.SoundId = "rbxassetid://6026984224"
-SndJoin.Volume  = 0.35
+-- =========[ أدوات مساعدة ]=========
+local function safeDestroy(o) if o and o.Destroy then pcall(function() o:Destroy() end) end end
 
-local SndLeave = Instance.new("Sound", SoundService)
-SndLeave.SoundId = "rbxassetid://6026984224"
-SndLeave.PlaybackSpeed = 0.85
-SndLeave.Volume  = 0.35
-
---========================= مساعدات نصية ====================
-local function trim(s) return (s:gsub("^%s+",""):gsub("%s+$","")) end
-local function low(s)  return string.lower(s or "") end
-local function starts(a,b) return a:sub(1,#b)==b end
-
--- مطابقة مرجّحة: يبدأ > يحتوي (2 نقاط للبداية، 1 للاحتواء)
-local function scoreMatch(name, query)
-    if #query < 2 then return -1 end
-    local n, q = low(name), low(query)
-    if starts(n,q) then return 2 end
-    if n:find(q, 1, true) then return 1 end
-    return -1
-end
-
-local function bestMatch(query)
-    local best, bestScore = nil, -1
-    local q = low(query)
-    for _,plr in ipairs(Players:GetPlayers()) do
-        local s1 = scoreMatch(plr.Name, q)
-        local s2 = scoreMatch(plr.DisplayName, q)
-        local sc = math.max(s1, s2)
-        if sc > bestScore then bestScore, best = sc, plr end
+local function new(inst,parent,props)
+    local o = Instance.new(inst)
+    if parent then o.Parent = parent end
+    if props then
+        for k,v in pairs(props) do
+            o[k] = v
+        end
     end
-    return (bestScore > 0) and best or nil
+    return o
 end
 
--- صورة مصغّرة آمنة
-local function headshot(userId)
-    local ok, img = pcall(function()
-        return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-    end)
-    if ok and img then return img end
-    return ("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150&format=png"):format(userId)
-end
+local function pad2(n) n = math.floor(n or 0); if n<10 then return "0"..n else return tostring(n) end end
 
--- تنسيق مدة (ثواني) → "س:د:ث"
-local function fmtDuration(seconds)
-    seconds = math.max(0, math.floor(seconds))
-    local h = math.floor(seconds/3600)
-    local m = math.floor((seconds%3600)/60)
-    local s = seconds%60
+local function fmtDuration(sec)
+    sec = math.max(0, math.floor(sec or 0))
+    local h = math.floor(sec/3600)
+    local m = math.floor((sec%3600)/60)
+    local s = sec%60
     if h > 0 then
-        return string.format("%02d:%02d:%02d", h, m, s)
+        return string.format("%d:%s:%s", h, pad2(m), pad2(s))
     else
-        return string.format("%02d:%02d", m, s)
+        return string.format("%s:%s", pad2(m), pad2(s))
     end
 end
 
---========================= إشعار بسيط ======================
-local function notify(gui, msg, color)
-    local n = Instance.new("TextLabel")
-    n.Parent = gui
-    n.Size   = UDim2.new(0, 280, 0, 36)
-    n.Position = UDim2.new(0.5, -140, 0.06, 0)
-    n.BackgroundColor3 = THEME.notifBG
-    n.TextColor3 = color or THEME.text
-    n.Font = Enum.Font.SourceSansBold
-    n.TextSize = 19
-    n.BorderSizePixel = 0
-    n.BackgroundTransparency = 0.15
-    n.Text = msg
-    n.ZIndex = 1000
-    TweenService:Create(n, TweenInfo.new(0.12), {BackgroundTransparency = 0.05}):Play()
-    task.wait(1.25)
-    TweenService:Create(n, TweenInfo.new(0.25), {TextTransparency=1, BackgroundTransparency=1}):Play()
-    task.wait(0.25)
-    n:Destroy()
+local function now()
+    -- os.clock أدق داخل الجلسة
+    return os.clock()
 end
 
---========================= سجل جلسة بسيط ===================
-local SessionLog = {}    -- { {userId=.., name=.., display=.., event="join"/"leave", t=os.clock()} , ... }
+local function headshot(userId, size)
+    size = size or 180
+    return string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=%d&h=%d", userId, size, size)
+end
 
-local function logEvent(userId, name, display, kind)
-    table.insert(SessionLog, {
-        userId  = userId,
-        name    = name,
-        display = display,
-        event   = kind,
-        t       = os.clock(),
+local function toast(txt)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "GS4 | العم حكومه 🍷";
+            Text  = txt;
+            Duration = 2.5;
+        })
+    end)
+end
+
+local function play(id, vol)
+    local s = new("Sound", workspace, {
+        SoundId = id, Volume = vol or 0.7, PlaybackSpeed = 1
     })
+    s:Play()
+    task.delay(4, function() safeDestroy(s) end)
 end
 
---========================= GUI رئيسي =======================
-local gui = Instance.new("ScreenGui")
-gui.Name = "GS4_Tracker_Arabic_Pro"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
-gui.Parent = CoreGui
+-- حفظ تاريخ الجلسة
+_G.GS4_TRACK_HISTORY = _G.GS4_TRACK_HISTORY or {}
+local SESSION_ID = _G.GS4_SESSION_ID or HttpService:GenerateGUID(false)
+_G.GS4_SESSION_ID = SESSION_ID
 
--- زر صغير متحرك (فتح/قفل)
-local toggleBtn = Instance.new("TextButton", gui)
-toggleBtn.Size = UDim2.new(0, 32, 0, 32)
-toggleBtn.Position = UDim2.new(0, 16, 0.22, 0)
-toggleBtn.BackgroundColor3 = THEME.toggleBG
-toggleBtn.Text = "≡"
-toggleBtn.TextScaled = true
-toggleBtn.TextColor3 = THEME.blue
-toggleBtn.BorderSizePixel = 0
-toggleBtn.AutoButtonColor = true
-toggleBtn.Draggable = true
-toggleBtn.ZIndex = 99
+-- =========[ إنشاء الواجهة ]=========
+local gui = new("ScreenGui", CoreGui, { Name = "GS4_GovTrack_UI", ZIndexBehavior = Enum.ZIndexBehavior.Sibling, ResetOnSpawn=false })
+local root = new("Frame", gui, {
+    BackgroundColor3 = THEME.bg,
+    BorderSizePixel  = 0,
+    AnchorPoint      = Vector2.new(0.5,0),
+    Position         = UDim2.fromScale(0.5, 0.18),
+    Size             = UDim2.fromOffset(920, 540),
+    Visible          = true
+})
+new("UICorner", root, { CornerRadius = UDim.new(0,16) })
+new("UIStroke", root, { Thickness = 1, Color = THEME.stroke, Transparency = 0.3 })
 
--- اللوحة
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, UI_SIZE.X, 0, UI_SIZE.Y)
-main.Position = UDim2.new(0.5, -UI_SIZE.X/2, 0.26, 0)
-main.BackgroundColor3 = THEME.bg
-main.BorderSizePixel = 0
-main.Visible = true
-main.Active = true
-main.Draggable = true
+-- شريط العنوان
+local header = new("Frame", root, {
+    Size = UDim2.new(1,0,0,56), BackgroundColor3 = THEME.header, BorderSizePixel=0
+})
+new("UICorner", header, { CornerRadius = UDim.new(0,16) })
 
--- عنوان وحقوق
-local header = Instance.new("TextLabel", main)
-header.Size = UDim2.new(1, 0, 0, 42)
-header.BackgroundTransparency = 1
-header.Font = Enum.Font.SourceSansBold
-header.TextSize = FONT_H1
-header.TextColor3 = THEME.blue
-header.Text = "GS4 | العم حكومه"
+local title = new("TextLabel", header, {
+    BackgroundTransparency = 1,
+    Size = UDim2.new(1,-120,1,0),
+    Position = UDim2.new(0,60,0,0),
+    Font = Enum.Font.GothamBold,
+    Text = "GS4 | العم حكومه  🍷",
+    TextColor3 = THEME.blue, TextScaled = true
+})
 
-local sep = Instance.new("Frame", main)
-sep.Size = UDim2.new(1, -20, 0, 1)
-sep.Position = UDim2.new(0, 10, 0, 44)
-sep.BackgroundColor3 = THEME.line
-sep.BorderSizePixel = 0
+-- أيقونة
+local emblem = new("ImageLabel", header, {
+    BackgroundTransparency = 1,
+    Size = UDim2.fromOffset(38,38),
+    Position = UDim2.new(0,10,0,9),
+    Image = "rbxassetid://15776015260"
+})
+new("UICorner", emblem, { CornerRadius = UDim.new(0,12) })
 
---========================= مكوّن بطاقة تتبع =================
-local Trackers, MAX = {}, 4
+-- زر فتح/قفل صغير ومتحرك
+local miniToggle = new("ImageButton", gui, {
+    Name = "MiniToggle",
+    BackgroundColor3 = THEME.header,
+    Size = UDim2.fromOffset(36,36),
+    Position = UDim2.new(1,-54,0,110),
+    Image = "rbxassetid://3926305904",
+    ImageRectOffset = Vector2.new(884,284),
+    ImageRectSize   = Vector2.new(36,36)
+})
+new("UICorner", miniToggle, { CornerRadius = UDim.new(1,0) })
+new("UIStroke", miniToggle, { Thickness=1, Color=THEME.stroke, Transparency=0.2 })
 
+-- جعل زر التبديل صغير قابل للسحب
+do
+    local dragging = false
+    local dragStart, startPos
+    miniToggle.InputBegan:Connect(function(io)
+        if io.UserInputType == Enum.UserInputType.MouseButton1 or io.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = io.Position
+            startPos = miniToggle.Position
+            io.Changed:Connect(function()
+                if io.UserInputState == Enum.UserInputState.End then dragging=false end
+            end)
+        end
+    end)
+    UserInput.InputChanged:Connect(function(io)
+        if dragging and (io.UserInputType==Enum.UserInputType.MouseMovement or io.UserInputType==Enum.UserInputType.Touch) then
+            local delta = io.Position - dragStart
+            miniToggle.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- حركة فتح/قفل
+local PANEL_OPEN = true
+local function togglePanel(show)
+    PANEL_OPEN = (show==nil) and not PANEL_OPEN or show
+    local target = PANEL_OPEN and 1 or 0
+    root.Visible = true
+    root.BackgroundTransparency = 1 - target
+    header.BackgroundTransparency = 1 - target
+    local goalPos = PANEL_OPEN and UDim2.fromScale(0.5,0.18) or UDim2.fromScale(0.5,-0.55)
+    TweenService:Create(root, TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Position=goalPos}):Play()
+end
+
+miniToggle.MouseButton1Click:Connect(function() togglePanel() end)
+
+-- الشبكة 2×2
+local grid = new("Frame", root, {BackgroundTransparency=1, Position=UDim2.new(0,14,0,70), Size=UDim2.new(1,-28,1,-84)})
+local uiGrid = new("UIGridLayout", grid, {
+    CellPadding = UDim2.fromOffset(16,16),
+    CellSize    = UDim2.new(0.5,-12,0.5,-12),
+    FillDirectionMaxCells = 2,
+    SortOrder   = Enum.SortOrder.LayoutOrder
+})
+
+-- =========[ حالة كل خانة ]=========
 export type CardState = {
-    card: Frame,
+    index: number,
+    frame: Frame,
     search: TextBox,
-    pfp: ImageLabel,
     nameL: TextLabel,
     displayL: TextLabel,
     joinL: TextLabel,
     leaveL: TextLabel,
-    statusDot: Frame,
     sinceL: TextLabel,
     elapsedL: TextLabel,
+    pfp: ImageLabel,
+    dot: Frame,
+
     targetId: number?,
-    online: boolean,
+    targetName: string?,
+    targetDisplay: string?,
     joins: number,
     leaves: number,
+    online: boolean,
     startedAt: number?,
-    lastSearchTick: number
+    lastSeen: number?,
 }
 
-local function makeCard(i): CardState
-    local card = Instance.new("Frame", main)
-    card.Size = UDim2.new(0.485, 0, 0, CARD_H)
-    card.BackgroundColor3 = THEME.panel
-    card.BorderSizePixel = 0
+-- =========[ إنشاء خانة ]=========
+local CARDS : {CardState} = {}
 
-    -- تموضع 2×2
-    local col = (i-1) % 2
-    local row = math.floor((i-1)/2)
-    local topMargin = 0.16
-    local rowStep   = 0.41
-    card.Position = UDim2.new(0.02 + col*0.50, 0, topMargin + row*rowStep, 0)
+local function makeCard(i: number): CardState
+    local card = new("Frame", grid, {
+        BackgroundColor3 = THEME.panel, BorderSizePixel=0
+    })
+    new("UICorner", card, {CornerRadius = UDim.new(0,12)})
+    new("UIStroke", card, {Color=THEME.stroke, Transparency=0.25})
 
-    -- حقل البحث (بدون Placeholder)
-    local search = Instance.new("TextBox", card)
-    search.Size = UDim2.new(1, -12, 0, 28)
-    search.Position = UDim2.new(0, 6, 0, 6)
-    search.BackgroundColor3 = THEME.field
-    search.BorderSizePixel   = 0
-    search.ClearTextOnFocus  = false
-    search.Text = ""
-    search.TextColor3 = THEME.text
-    search.TextSize = FONT_H2
-    search.Font = Enum.Font.SourceSans
+    -- ترويسة صغيرة + صندوق البحث
+    local head = new("Frame", card, {BackgroundColor3=THEME.header, BorderSizePixel=0, Size=UDim2.new(1,0,0,44)})
+    new("UICorner", head, {CornerRadius = UDim.new(0,12)})
 
-    -- صورة
-    local pfp = Instance.new("ImageLabel", card)
-    pfp.BackgroundTransparency = 1
-    pfp.Size = UDim2.new(0, 56, 0, 56)
-    pfp.Position = UDim2.new(0, 6, 0, 44)
-    pfp.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+    local search = new("TextBox", head, {
+        BackgroundColor3 = THEME.searchBox,
+        PlaceholderText = "",
+        Text = "",
+        Font = Enum.Font.GothamMedium,
+        TextColor3 = THEME.text,
+        TextSize = 18,
+        ClearTextOnFocus = false,
+        AnchorPoint = Vector2.new(0.5,0.5),
+        Position = UDim2.fromScale(0.5,0.5),
+        Size = UDim2.new(1,-20,1,-12)
+    })
+    new("UICorner", search, {CornerRadius = UDim.new(0,8)})
 
-    -- نقطة حالة
-    local statusDot = Instance.new("Frame", card)
-    statusDot.Size = UDim2.new(0, 10, 0, 10)
-    statusDot.Position = UDim2.new(0, 6+56-10, 0, 44) -- فوق يمين الصورة
-    statusDot.BackgroundColor3 = THEME.offlineDot
-    statusDot.BorderSizePixel = 0
-    statusDot.Visible = true
-    local statusCorner = Instance.new("UICorner", statusDot)
-    statusCorner.CornerRadius = UDim.new(0, 5)
+    -- الصورة + الدوت
+    local pfp = new("ImageLabel", card, {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromOffset(64,64),
+        Position = UDim2.new(0,12,0,56),
+        ImageTransparency = 0,
+        Visible = false
+    })
+    new("UICorner", pfp, {CornerRadius=UDim.new(0,12)})
 
-    -- اسم المستخدم (لا يظهر حتى يتم الالتقاط)
-    local nameL = Instance.new("TextLabel", card)
-    nameL.BackgroundTransparency = 1
-    nameL.Size = UDim2.new(1, -74, 0, 24)
-    nameL.Position = UDim2.new(0, 70, 0, 44)
-    nameL.Font = Enum.Font.SourceSansBold
-    nameL.TextSize = FONT_H2
-    nameL.TextXAlignment = Enum.TextXAlignment.Left
-    nameL.TextColor3 = THEME.blue2
-    nameL.Text = ""
-    nameL.Visible = false
+    local dot = new("Frame", pfp, {
+        Size = UDim2.fromOffset(10,10),
+        Position = UDim2.new(1,-12,0,2),
+        BackgroundColor3 = THEME.offlineDot, BorderSizePixel=0, Visible=false
+    })
+    new("UICorner", dot, {CornerRadius=UDim.new(1,0)})
 
-    -- اللقب (لا يظهر حتى يتم الالتقاط)
-    local displayL = Instance.new("TextLabel", card)
-    displayL.BackgroundTransparency = 1
-    displayL.Size = UDim2.new(1, -74, 0, 22)
-    displayL.Position = UDim2.new(0, 70, 0, 70)
-    displayL.Font = Enum.Font.SourceSans
-    displayL.TextSize = FONT_H3
-    displayL.TextXAlignment = Enum.TextXAlignment.Left
-    displayL.TextColor3 = THEME.cyan
-    displayL.Text = ""
-    displayL.Visible = false
+    -- نصوص الاسم/اللقب
+    local nameL = new("TextLabel", card, {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0,88,0,58),
+        Size = UDim2.new(1,-100,0,24),
+        Font = Enum.Font.GothamBold, TextSize=20,
+        TextColor3 = THEME.blue, TextXAlignment=Enum.TextXAlignment.Left,
+        Visible=false, Text = ""
+    })
+    local displayL = new("TextLabel", card, {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0,88,0,82),
+        Size = UDim2.new(1,-100,0,22),
+        Font = Enum.Font.Gotham, TextSize=18,
+        TextColor3 = THEME.midText, TextXAlignment=Enum.TextXAlignment.Left,
+        Visible=false, Text = ""
+    })
 
-    -- عدادات (سطر واحد مرتب)
-    local joinL = Instance.new("TextLabel", card)
-    joinL.BackgroundTransparency = 1
-    joinL.Size = UDim2.new(0.5, -10, 0, 20)
-    joinL.Position = UDim2.new(0, 6, 0, 110)
-    joinL.Font = Enum.Font.SourceSansBold
-    joinL.TextSize = 16
-    joinL.TextXAlignment = Enum.TextXAlignment.Left
-    joinL.TextColor3 = THEME.green
-    joinL.Text = "مرات الدخول: 0"
+    -- عدادات
+    local joinL = new("TextLabel", card, {
+        BackgroundTransparency = 1, Text = "0 :دخول",
+        TextColor3 = THEME.green, Font=Enum.Font.GothamSemibold, TextSize=20,
+        Position = UDim2.new(0,14,0,126), Size = UDim2.fromOffset(160,24)
+    })
+    local leaveL = new("TextLabel", card, {
+        BackgroundTransparency = 1, Text = "0 :خروج",
+        TextColor3 = THEME.red, Font=Enum.Font.GothamSemibold, TextSize=20,
+        Position = UDim2.new(0,190,0,126), Size = UDim2.fromOffset(160,24)
+    })
 
-    local leaveL = Instance.new("TextLabel", card)
-    leaveL.BackgroundTransparency = 1
-    leaveL.Size = UDim2.new(0.5, -10, 0, 20)
-    leaveL.Position = UDim2.new(0.5, 0, 0, 110)
-    leaveL.Font = Enum.Font.SourceSansBold
-    leaveL.TextSize = 16
-    leaveL.TextXAlignment = Enum.TextXAlignment.Left
-    leaveL.TextColor3 = THEME.red
-    leaveL.Text = "مرات الخروج: 0"
-
-    -- سطر معلومات إضافية: منذ البدء + المدة
-    local sinceL = Instance.new("TextLabel", card)
-    sinceL.BackgroundTransparency = 1
-    sinceL.Size = UDim2.new(0.5, -10, 0, 18)
-    sinceL.Position = UDim2.new(0, 6, 0, 130)
-    sinceL.Font = Enum.Font.SourceSans
-    sinceL.TextSize = 14
-    sinceL.TextXAlignment = Enum.TextXAlignment.Left
-    sinceL.TextColor3 = THEME.text
-    sinceL.TextTransparency = 0.15
-    sinceL.Text = "" -- يظهر بعد الالتقاط
-
-    local elapsedL = Instance.new("TextLabel", card)
-    elapsedL.BackgroundTransparency = 1
-    elapsedL.Size = UDim2.new(0.5, -10, 0, 18)
-    elapsedL.Position = UDim2.new(0.5, 0, 0, 130)
-    elapsedL.Font = Enum.Font.SourceSans
-    elapsedL.TextSize = 14
-    elapsedL.TextXAlignment = Enum.TextXAlignment.Right
-    elapsedL.TextColor3 = THEME.text
-    elapsedL.TextTransparency = 0.15
-    elapsedL.Text = ""
+    local sinceL = new("TextLabel", card, {
+        BackgroundTransparency=1, Text="", TextColor3=THEME.midText,
+        Font=Enum.Font.Gotham, TextSize=16, Position=UDim2.new(0,14,0,156),
+        Size=UDim2.fromOffset(280,20)
+    })
+    local elapsedL = new("TextLabel", card, {
+        BackgroundTransparency=1, Text="", TextColor3=THEME.midText,
+        Font=Enum.Font.Gotham, TextSize=16, Position=UDim2.new(0,14,0,176),
+        Size=UDim2.fromOffset(280,20)
+    })
 
     return {
-        card      = card,
-        search    = search,
-        pfp       = pfp,
-        nameL     = nameL,
-        displayL  = displayL,
-        joinL     = joinL,
-        leaveL    = leaveL,
-        statusDot = statusDot,
-        sinceL    = sinceL,
-        elapsedL  = elapsedL,
-        targetId  = nil,
-        online    = false,
-        joins     = 0,
-        leaves    = 0,
-        startedAt = nil,
-        lastSearchTick = 0
+        index=i, frame=card, search=search,
+        nameL=nameL, displayL=displayL, joinL=joinL, leaveL=leaveL,
+        sinceL=sinceL, elapsedL=elapsedL, pfp=pfp, dot=dot,
+        targetId=nil, targetName=nil, targetDisplay=nil,
+        joins=0, leaves=0, online=false, startedAt=nil, lastSeen=nil
     }
 end
 
-for i=1,MAX do
-    Trackers[i] = makeCard(i)
-end
+for i=1,4 do table.insert(CARDS, makeCard(i)) end
 
---========================= دوال ضبط البطاقة =================
+-- =========[ منطق التتبع ]=========
 local function clearCard(T: CardState)
-    T.targetId  = nil
-    T.online    = false
+    T.targetId, T.targetName, T.targetDisplay = nil, nil, nil
     T.joins, T.leaves = 0,0
-    T.pfp.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-    T.nameL.Text, T.displayL.Text = "", ""
+    T.online = false
+    T.startedAt, T.lastSeen = nil,nil
     T.nameL.Visible, T.displayL.Visible = false, false
-    T.joinL.Text, T.leaveL.Text = "مرات الدخول: 0", "مرات الخروج: 0"
-    T.statusDot.BackgroundColor3 = THEME.offlineDot
+    T.pfp.Visible = false
+    T.dot.Visible  = false
+    T.joinL.Text = "0 :دخول";  T.leaveL.Text = "0 :خروج"
     T.sinceL.Text, T.elapsedL.Text = "", ""
-    T.startedAt = nil
 end
 
 local function setCard(T: CardState, plr: Player)
-    T.targetId  = plr.UserId
-    T.online    = true
+    T.targetId = plr.UserId
+    T.targetName = plr.Name
+    T.targetDisplay = plr.DisplayName
     T.joins, T.leaves = 0,0
-    T.pfp.Image = headshot(plr.UserId)
-    T.nameL.Text    = "اسم المستخدم: " .. plr.Name
+    T.online = true
+    T.startedAt = now()
+    T.lastSeen  = now()
+
+    T.pfp.Image = headshot(plr.UserId, 150)
+    T.pfp.Visible = true
+    T.dot.Visible = true
+    T.dot.BackgroundColor3 = THEME.onlineDot
+
+    T.nameL.Text = "اسم المستخدم: " .. plr.Name
     T.displayL.Text = "اللقب: " .. plr.DisplayName
-    T.nameL.Visible = true
-    T.displayL.Visible = true
-    T.statusDot.BackgroundColor3 = THEME.onlineDot
-    T.startedAt = os.clock()
+    T.nameL.Visible, T.displayL.Visible = true, true
+
+    T.joinL.Text  = "0 :دخول"
+    T.leaveL.Text = "0 :خروج"
     T.sinceL.Text = "بدأ التتبع الآن"
     T.elapsedL.Text = "المدة: 00:00"
+
+    toast(("تم تحديد %s"):format(plr.DisplayName))
 end
 
--- تحديث مدة التتبع حيًا
-local function updateElapsed()
-    for _,T in ipairs(Trackers) do
+local function findMatch(prefix: string): Player?
+    if not prefix or #prefix < 2 then return nil end
+    prefix = prefix:lower()
+    local found: Player? = nil
+    for _,p in ipairs(Players:GetPlayers()) do
+        local n = p.Name:lower()
+        local d = p.DisplayName:lower()
+        if n:sub(1,#prefix) == prefix or d:sub(1,#prefix) == prefix then
+            found = p; break
+        end
+    end
+    return found
+end
+
+-- تحديث زمن المدة
+RunService.Heartbeat:Connect(function()
+    for _,T in ipairs(CARDS) do
         if T.targetId and T.startedAt then
-            local dt = os.clock() - T.startedAt
-            T.elapsedL.Text = "المدة: " .. fmtDuration(dt)
-            if dt > 1 and T.sinceL.Text == "بدأ التتبع الآن" then
-                T.sinceL.Text = "منذ " .. fmtDuration(dt)
+            T.elapsedL.Text = "المدة: " .. fmtDuration(now() - T.startedAt)
+        end
+    end
+end)
+
+-- البحث الفوري لكل خانة
+for _,T in ipairs(CARDS) do
+    T.search:GetPropertyChangedSignal("Text"):Connect(function()
+        local text = T.search.Text
+        if text == nil then text = "" end
+        if #text == 0 then
+            clearCard(T)
+            return
+        end
+        if #text >= 2 then
+            local plr = findMatch(text)
+            if plr and (not T.targetId or T.targetId ~= plr.UserId) then
+                setCard(T, plr)
             end
         end
-    end
-end
-
---========================= بحث سريع ========================
-local function handleSearch(T: CardState, text: string)
-    local q = trim(text or "")
-    if q == "" then
-        clearCard(T)
-        return
-    end
-    if #q < 2 then
-        -- أقل من حرفين: لا نبحث (تجنّب الضوضاء، وللحفاظ على السرعة)
-        return
-    end
-    local plr = bestMatch(q)
-    if plr then
-        setCard(T, plr)
-    end
-end
-
-for _,T in ipairs(Trackers) do
-    T.search:GetPropertyChangedSignal("Text"):Connect(function()
-        T.lastSearchTick = tick()
-        local thisTick = T.lastSearchTick
-        task.delay(SEARCH_DEBOUNCE, function()
-            if thisTick ~= T.lastSearchTick then return end
-            handleSearch(T, T.search.Text)
-        end)
-    end)
-    T.search.FocusLost:Connect(function()
-        if trim(T.search.Text) == "" then clearCard(T) end
     end)
 end
 
---========================= تتبع حي (دخول/خروج) =============
-local function onJoin(plr: Player)
-    for _,T in ipairs(Trackers) do
-        if T.targetId and plr.UserId == T.targetId then
-            T.online = true
+-- تحديث النقطة الخضراء حسب وجود اللاعب
+local function setOnline(T: CardState, online: boolean)
+    T.online = online
+    if T.dot then
+        T.dot.BackgroundColor3 = online and THEME.onlineDot or THEME.offlineDot
+    end
+end
+
+-- تسجيل حدث للسجل
+local function logEvent(userId, kind, when)
+    local rec = {
+        userId=userId, kind=kind, t=when or now(), sid=SESSION_ID
+    }
+    table.insert(_G.GS4_TRACK_HISTORY, rec)
+end
+
+-- لمّا لاعب يدخل
+Players.PlayerAdded:Connect(function(plr)
+    for _,T in ipairs(CARDS) do
+        if T.targetId == plr.UserId then
             T.joins += 1
-            T.joinL.Text = "مرات الدخول: " .. T.joins
-            T.pfp.Image = headshot(plr.UserId)
-            T.nameL.Text    = "اسم المستخدم: " .. plr.Name
-            T.displayL.Text = "اللقب: " .. plr.DisplayName
-            T.statusDot.BackgroundColor3 = THEME.onlineDot
-            SndJoin:Play()
-            notify(gui, plr.DisplayName .. " دخل", THEME.green)
-            logEvent(plr.UserId, plr.Name, plr.DisplayName, "join")
+            T.joinL.Text = (tostring(T.joins).." :دخول")
+            setOnline(T, true)
+            T.lastSeen = now()
+            play(SFX.Join, 0.8)
+            toast(("دخل %s"):format(plr.DisplayName))
+            logEvent(plr.UserId, "join")
         end
     end
-end
+end)
 
-local function onLeave(plr: Player)
-    for _,T in ipairs(Trackers) do
-        if T.targetId and plr.UserId == T.targetId then
-            T.online = false
+-- لمّا لاعب يخرج
+Players.PlayerRemoving:Connect(function(plr)
+    for _,T in ipairs(CARDS) do
+        if T.targetId == plr.UserId then
             T.leaves += 1
-            T.leaveL.Text = "مرات الخروج: " .. T.leaves
-            T.statusDot.BackgroundColor3 = THEME.offlineDot
-            SndLeave:Play()
-            notify(gui, plr.DisplayName .. " خرج", THEME.red)
-            logEvent(plr.UserId, plr.Name, plr.DisplayName, "leave")
+            T.leaveL.Text = (tostring(T.leaves).." :خروج")
+            setOnline(T, false)
+            T.lastSeen = now()
+            play(SFX.Leave, 0.8)
+            toast(("خرج %s"):format(plr.DisplayName))
+            logEvent(plr.UserId, "leave")
         end
     end
-end
-
-Players.PlayerAdded:Connect(onJoin)
-Players.PlayerRemoving:Connect(onLeave)
-
---========================= زر فتح/قفل ======================
-toggleBtn.MouseButton1Click:Connect(function()
-    main.Visible = not main.Visible
 end)
 
---========================= تحسين الاستجابة البصرية ==========
--- ظل بسيط للكروت عند المرور
-for _,T in ipairs(Trackers) do
-    T.card.MouseEnter:Connect(function()
-        TweenService:Create(T.card, TweenInfo.new(0.12), {BackgroundTransparency = 0.00}):Play()
-    end)
-    T.card.MouseLeave:Connect(function()
-        TweenService:Create(T.card, TweenInfo.new(0.20), {BackgroundTransparency = 0.03}):Play()
-    end)
-end
-
---========================= ضبط تلقائي للأحجام ===============
-local function autoscale()
-    local cam = workspace.CurrentCamera
-    if not cam then return end
-    local vp = cam.ViewportSize
-    if vp.X < 900 then
-        main.Size = UDim2.new(0, UI_SIZE.X - 40, 0, UI_SIZE.Y - 30)
-        header.TextSize = FONT_H1 - 2
-        for _,T in ipairs(Trackers) do
-            T.card.Size = UDim2.new(0.485, 0, 0, CARD_H - 8)
-            T.nameL.TextSize   = FONT_H2 - 1
-            T.displayL.TextSize= FONT_H3 - 1
+-- مزامنة أولية لو كان اللاعب already في السيرفر
+task.defer(function()
+    for _,T in ipairs(CARDS) do
+        if T.targetId then
+            local p = Players:GetPlayerByUserId(T.targetId)
+            setOnline(T, p ~= nil)
         end
     end
-end
-autoscale()
-
--- تحديث المدة كل إطار (خفيف)
-RunService.RenderStepped:Connect(function()
-    updateElapsed()
 end)
 
---========================= أدوات اختيارية (نسخ السجل) =======
--- ملاحظة: Roblox لا يسمح بملفات مباشرة من LocalScript، لذا نخزن السجل في الذاكرة.
--- تقدر تستخدم SessionLog من خلال _G:
-_G.GS4_Tracker_SessionLog = SessionLog
-
---========================= تنظيف إن لزم =====================
--- مفيش AutoClean هنا لأننا عايزين الواجهة تفضل لحد ما اللاعب يطلع من السيرفر.
--- لو حابب زر "إعادة ضبط" نضيفه بسهولة:
-local function resetAll()
-    for _,T in ipairs(Trackers) do
-        T.search.Text = ""
-        clearCard(T)
-    end
-    table.clear(SessionLog)
-    notify(gui, "تم مسح كل التتبعات والسجل", THEME.blue)
+-- =========[ تحريك اللوحة كلها ]=========
+do
+    local dragging = false
+    local dragStart, startPos
+    header.InputBegan:Connect(function(io)
+        if io.UserInputType == Enum.UserInputType.MouseButton1 or io.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = io.Position
+            startPos = root.Position
+            io.Changed:Connect(function()
+                if io.UserInputState == Enum.UserInputState.End then dragging=false end
+            end)
+        end
+    end)
+    UserInput.InputChanged:Connect(function(io)
+        if dragging and (io.UserInputType==Enum.UserInputType.MouseMovement or io.UserInputType==Enum.UserInputType.Touch) then
+            local delta = io.Position - dragStart
+            root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
 end
 
--- (اختياري) اختصار من الكيبورد: Ctrl+R لإعادة الضبط
-local UIS = game:GetService("UserInputService")
-UIS.InputBegan:Connect(function(inp, gpe)
-    if gpe then return end
-    if inp.KeyCode == Enum.KeyCode.R and UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
-        resetAll()
+-- =========[ مفاتيح سريعة ]=========
+-- M: إظهار/إخفاء اللوحة
+UserInput.InputBegan:Connect(function(io, gp)
+    if gp then return end
+    if io.KeyCode == Enum.KeyCode.M then
+        togglePanel()
     end
 end)
 
---========================= نهاية ============================
--- جاهز. اكتب في أي صندوق بحث حرفين أو أكثر من اسم/لقب اللاعب وسيتم الالتقاط فورًا.
--- لا يوجد اختيار تلقائي من غير كتابة منك.
--- العدادات من لحظة التتبع، مع إشعارات وصوت، ووقت/مدة تتبع حيّة.
+-- =========[ نصائح سريعة مرّة واحدة ]=========
+task.delay(0.2, function()
+    toast("اكتب أول حرفين أو أكثر من اسم اللاعب (يوزر أو لقب) داخل كل خانة.")
+end)
+
+-- =========[ تحسينات تحميل الصورة ]=========
+-- نجرب تحميل الصورة بعد التعيين لضمان الظهور السريع
+for _,T in ipairs(CARDS) do
+    T.pfp:GetPropertyChangedSignal("Image"):Connect(function()
+        local ok = pcall(function() ContentProvider:PreloadAsync({T.pfp}) end)
+        if not ok then -- تجاهل
+        end
+    end)
+end
+
+-- =========[ حماية من التكرار (اسم مستخدم واحد في أكثر من خانة) ]=========
+local function preventDuplicate(targetId, ownerIndex)
+    for _,T in ipairs(CARDS) do
+        if T.index ~= ownerIndex and T.targetId == targetId then
+            -- نفرغ الأقدم (هنا نفضي الحالية الجديدة بدل القديمة)؟ هنخلّي الأقدم محفوظة
+            -- نفضي الجديدة:
+            local cur = CARDS[ownerIndex]
+            if cur then
+                clearCard(cur)
+                toast("هذا اللاعب متتبع في خانة أخرى.")
+            end
+            return true
+        end
+    end
+    return false
+end
+
+-- ربط منع التكرار مع التعيين
+for _,T in ipairs(CARDS) do
+    T.search:GetPropertyChangedSignal("Text"):Connect(function()
+        local txt = T.search.Text
+        if txt and #txt >= 2 then
+            local p = findMatch(txt)
+            if p then
+                if preventDuplicate(p.UserId, T.index) then return end
+                if not T.targetId or T.targetId ~= p.UserId then
+                    setCard(T, p)
+                end
+            end
+        end
+    end)
+end
+
+-- =========[ نهاية ]=========
+-- الكود خلص. استمتع ✨
