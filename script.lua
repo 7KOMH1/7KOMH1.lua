@@ -1,158 +1,163 @@
--- ✦ نسخة شاملة Ultimate ✦
--- حقوق ✦ 𝑬𝑮 ✦ | العم حكومه🍷
+--[[
+    📌 V14.1 Ultra Final
+    حقوق: EG | العم حكومه 🍷
+    تتبع 4 لاعبين - كامل بالأفاتار والدخول/الخروج
+]]--
 
 local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
 
--- GUI رئيسي
-local ScreenGui = Instance.new("ScreenGui", CoreGui)
-ScreenGui.Name = "EG_UltimateTracker"
+-- واجهة رئيسية
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TrackerGui"
+ScreenGui.Parent = game:GetService("CoreGui")
 
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 600, 0, 380)
-MainFrame.Position = UDim2.new(0, 50, 0, 120)
-MainFrame.BackgroundColor3 = Color3.fromRGB(10,10,10)
-MainFrame.Active = true
-MainFrame.Draggable = true
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+-- زرار الفتح/القفل (≡)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 30, 0, 30)
+ToggleButton.Position = UDim2.new(0, 10, 0, 10)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(30,30,30)
+ToggleButton.TextColor3 = Color3.fromRGB(0,170,255)
+ToggleButton.Text = "≡"
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.TextSize = 22
+ToggleButton.Parent = ScreenGui
 
-local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, 0, 0, 45)
-Title.Text = "✦ 𝑬𝑮 ✦ | العم حكومه🍷"
-Title.TextColor3 = Color3.fromRGB(0,170,255)
-Title.TextScaled = true
+-- الإطار الرئيسي
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 600, 0, 350)
+Frame.Position = UDim2.new(0, 60, 0, 80)
+Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Frame.Visible = false
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+-- العنوان
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(0,170,255)
+Title.Text = "EG | العم حكومه 🍷"
 Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 24
+Title.Parent = Frame
 
-local Grid = Instance.new("Frame", MainFrame)
-Grid.Size = UDim2.new(1, -20, 1, -70)
-Grid.Position = UDim2.new(0, 10, 0, 60)
-Grid.BackgroundTransparency = 1
-
-local UIGrid = Instance.new("UIGridLayout", Grid)
-UIGrid.CellSize = UDim2.new(0, 270, 0, 120)
-UIGrid.CellPadding = UDim2.new(0, 20, 0, 20)
-
--- Cache للاعبين (تحديث تلقائي)
-local nameCache = {}
-local function refreshCache()
-    nameCache = {}
-    for _, plr in ipairs(Players:GetPlayers()) do
-        nameCache[plr.Name:lower()] = plr
-    end
-end
-refreshCache()
-
-Players.PlayerAdded:Connect(function(plr)
-    nameCache[plr.Name:lower()] = plr
-end)
-Players.PlayerRemoving:Connect(function(plr)
-    nameCache[plr.Name:lower()] = nil
+-- وظيفة الزرار
+ToggleButton.MouseButton1Click:Connect(function()
+    Frame.Visible = not Frame.Visible
 end)
 
--- دالة اختيار أفضل مطابقة
-local function findBestMatch(txt)
-    local best, score = nil, math.huge
-    for name, plr in pairs(nameCache) do
-        if name:sub(1, #txt) == txt then
-            local diff = math.abs(#name - #txt)
-            if diff < score then
-                score = diff
-                best = plr
-            end
-        end
-    end
-    return best
-end
+-- دالة إنشاء تتبع لاعب
+local function createTracker(xPos, yPos, parent)
+    local boxFrame = Instance.new("Frame")
+    boxFrame.Size = UDim2.new(0, 280, 0, 140)
+    boxFrame.Position = UDim2.new(0, xPos, 0, yPos)
+    boxFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+    boxFrame.Parent = parent
 
--- دالة إنشاء خانة لاعب
-local function CreatePlayerBox()
-    local Box = Instance.new("Frame", Grid)
-    Box.BackgroundColor3 = Color3.fromRGB(25,25,25)
-    Box.BorderSizePixel = 0
-    Instance.new("UICorner", Box).CornerRadius = UDim.new(0, 10)
+    -- خانة إدخال
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(1, -90, 0, 30)
+    input.Position = UDim2.new(0, 10, 0, 10)
+    input.PlaceholderText = "اكتب أول 2-3 حروف"
+    input.Text = ""
+    input.TextColor3 = Color3.new(1,1,1)
+    input.BackgroundColor3 = Color3.fromRGB(50,50,50)
+    input.Parent = boxFrame
 
-    local NameInput = Instance.new("TextBox", Box)
-    NameInput.Size = UDim2.new(1, -10, 0, 28)
-    NameInput.Position = UDim2.new(0, 5, 0, 5)
-    NameInput.PlaceholderText = "✍️ اكتب أول حروف من اسم اللاعب"
-    NameInput.TextColor3 = Color3.new(1,1,1)
-    NameInput.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    NameInput.ClearTextOnFocus = false
-    NameInput.Font = Enum.Font.SourceSansSemibold
+    -- صورة الأفاتار
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 60, 0, 60)
+    avatar.Position = UDim2.new(1, -70, 0, 10)
+    avatar.BackgroundTransparency = 1
+    avatar.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+    avatar.Parent = boxFrame
 
-    local Avatar = Instance.new("ImageLabel", Box)
-    Avatar.Size = UDim2.new(0, 60, 0, 60)
-    Avatar.Position = UDim2.new(0, 5, 0, 40)
-    Avatar.BackgroundTransparency = 1
+    -- الاسم
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, -20, 0, 25)
+    nameLabel.Position = UDim2.new(0, 10, 0, 50)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.fromRGB(0,170,255)
+    nameLabel.Text = "لا يوجد لاعب"
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 18
+    nameLabel.Parent = boxFrame
 
-    local Info = Instance.new("TextLabel", Box)
-    Info.Size = UDim2.new(1, -70, 0, 60)
-    Info.Position = UDim2.new(0, 70, 0, 40)
-    Info.Text = "🎯 لم يتم تحديد لاعب"
-    Info.TextColor3 = Color3.fromRGB(220,220,220)
-    Info.TextWrapped = true
-    Info.BackgroundTransparency = 1
-    Info.Font = Enum.Font.SourceSansBold
-    Info.TextXAlignment = Enum.TextXAlignment.Left
-    Info.TextYAlignment = Enum.TextYAlignment.Top
+    -- عداد الدخول
+    local joinLabel = Instance.new("TextLabel")
+    joinLabel.Size = UDim2.new(1, -20, 0, 25)
+    joinLabel.Position = UDim2.new(0, 10, 0, 80)
+    joinLabel.BackgroundTransparency = 1
+    joinLabel.TextColor3 = Color3.fromRGB(0,255,0)
+    joinLabel.Text = "✅ مرات الدخول: 0"
+    joinLabel.Font = Enum.Font.SourceSans
+    joinLabel.TextSize = 16
+    joinLabel.Parent = boxFrame
 
-    local joins, leaves = 0, 0
-    local trackedPlayer = nil
+    -- عداد الخروج
+    local leaveLabel = Instance.new("TextLabel")
+    leaveLabel.Size = UDim2.new(1, -20, 0, 25)
+    leaveLabel.Position = UDim2.new(0, 10, 0, 105)
+    leaveLabel.BackgroundTransparency = 1
+    leaveLabel.TextColor3 = Color3.fromRGB(255,0,0)
+    leaveLabel.Text = "❌ مرات الخروج: 0"
+    leaveLabel.Font = Enum.Font.SourceSans
+    leaveLabel.TextSize = 16
+    leaveLabel.Parent = boxFrame
 
+    -- متغيرات التتبع
+    local targetPlayer, joins, leaves = nil, 0, 0
+
+    -- تحديث العدادات
     local function updateLabels()
-        if trackedPlayer then
-            Info.Text = string.format("🎯 %s\n✅ دخول: %d | ❌ خروج: %d", trackedPlayer.Name, joins, leaves)
-        else
-            Info.Text = "🎯 لم يتم تحديد لاعب"
-            Avatar.Image = ""
+        if targetPlayer then
+            joinLabel.Text = "✅ مرات الدخول: " .. joins
+            leaveLabel.Text = "❌ مرات الخروج: " .. leaves
         end
     end
 
-    -- تحديث مباشر أثناء الكتابة
-    NameInput:GetPropertyChangedSignal("Text"):Connect(function()
-        local txt = NameInput.Text:lower()
-        if txt ~= "" then
-            local plr = findBestMatch(txt)
-            if plr then
-                trackedPlayer = plr
-                joins, leaves = 0, 0
-                Avatar.Image = string.format(
-                    "https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150",
-                    plr.UserId
-                )
-                updateLabels()
-            else
-                trackedPlayer = nil
-                Info.Text = "⚠️ لاعب غير موجود"
-                Avatar.Image = ""
-            end
-        else
-            trackedPlayer = nil
+    -- البحث عن اللاعب
+    input.FocusLost:Connect(function()
+        local txt = input.Text:lower()
+        if txt == "" then
+            targetPlayer = nil
+            avatar.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+            nameLabel.Text = "لا يوجد لاعب"
             joins, leaves = 0, 0
-            updateLabels()
+            joinLabel.Text = "✅ مرات الدخول: 0"
+            leaveLabel.Text = "❌ مرات الخروج: 0"
+            return
+        end
+        for _,plr in ipairs(Players:GetPlayers()) do
+            if plr.Name:lower():sub(1, #txt) == txt then
+                targetPlayer = plr
+                nameLabel.Text = plr.Name
+                avatar.Image = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=60&height=60&format=png", plr.UserId)
+                joins, leaves = 0, 0
+                updateLabels()
+                break
+            end
         end
     end)
 
-    -- تتبع دخول/خروج
+    -- أحداث الدخول والخروج
     Players.PlayerAdded:Connect(function(plr)
-        if trackedPlayer and plr == trackedPlayer then
+        if targetPlayer and plr.Name == targetPlayer.Name then
             joins += 1
             updateLabels()
         end
     end)
     Players.PlayerRemoving:Connect(function(plr)
-        if trackedPlayer and plr == trackedPlayer then
+        if targetPlayer and plr.Name == targetPlayer.Name then
             leaves += 1
             updateLabels()
         end
     end)
-
-    updateLabels()
 end
 
--- ✦ عدد الخانات (غير الرقم 4 لأي عدد)
-local totalBoxes = 4
-for i = 1, totalBoxes do
-    CreatePlayerBox()
-end
+-- إنشاء ٤ خانات (٢ فوق + ٢ تحت)
+createTracker(10, 50, Frame)
+createTracker(310, 50, Frame)
+createTracker(10, 200, Frame)
+createTracker(310, 200, Frame)
