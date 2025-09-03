@@ -1,134 +1,137 @@
--- 🍷 GS4 | العم حكومه 🛰️
--- نسخة نهائية
+--[[ 
+ 📌 نسخة نهائية + صوت دخول وخروج
+ 🍷 حقوق: GS4 | العم حكومه
+]]
 
 local Players = game:GetService("Players")
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
 
--- زر فتح/قفل متحرك
+-- اصوات
+local JoinSound = Instance.new("Sound")
+JoinSound.SoundId = "rbxassetid://12222005" -- صوت دخول
+JoinSound.Volume = 2
+JoinSound.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local LeaveSound = Instance.new("Sound")
+LeaveSound.SoundId = "rbxassetid://12222242" -- صوت خروج
+LeaveSound.Volume = 2
+LeaveSound.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- زرار الفتح/القفل
 local ToggleButton = Instance.new("TextButton")
-ToggleButton.Parent = ScreenGui
-ToggleButton.Size = UDim2.new(0, 40, 0, 40)
-ToggleButton.Position = UDim2.new(0, 10, 0, 200)
+ToggleButton.Size = UDim2.new(0,40,0,40)
+ToggleButton.Position = UDim2.new(0.05,0,0.2,0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(20,20,20)
 ToggleButton.Text = "≡"
-ToggleButton.TextScaled = true
-ToggleButton.BackgroundColor3 = Color3.fromRGB(30,30,30)
-ToggleButton.TextColor3 = Color3.new(1,1,1)
-ToggleButton.BorderSizePixel = 0
-ToggleButton.Active = true
+ToggleButton.TextColor3 = Color3.fromRGB(0,200,255)
+ToggleButton.Parent = ScreenGui
 ToggleButton.Draggable = true
 
--- الإطار الأساسي
+-- الفريم الاساسي
 local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0,500,0,350)
+MainFrame.Position = UDim2.new(0.5,-250,0.5,-175)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
-MainFrame.Size = UDim2.new(0, 450, 0, 320)
-MainFrame.Position = UDim2.new(0, 70, 0, 150)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
-MainFrame.Visible = true
-MainFrame.Active = true
-MainFrame.Draggable = true
-MainFrame.BorderSizePixel = 0
-
--- التحكم في إظهار/إخفاء الفريم
-ToggleButton.MouseButton1Click:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
-end)
 
 -- العنوان
 local Title = Instance.new("TextLabel")
-Title.Parent = MainFrame
-Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Size = UDim2.new(1,0,0,50)
 Title.BackgroundTransparency = 1
-Title.Text = "🍷 GS4 | العم حكومه 🛰️"
-Title.TextColor3 = Color3.fromRGB(0,170,255)
+Title.Text = "🍷 GS4 | العم حكومه"
+Title.TextColor3 = Color3.fromRGB(0,200,255)
 Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 22
+Title.TextScaled = true
+Title.Parent = MainFrame
 
--- دالة لإنشاء كارت لاعب
-local function createPlayerBox(parent, position)
-    local Box = Instance.new("Frame")
-    Box.Parent = parent
-    Box.Size = UDim2.new(0.5, -15, 0.5, -15)
-    Box.Position = position
-    Box.BackgroundColor3 = Color3.fromRGB(30,30,30)
-    Box.BorderSizePixel = 0
-
-    local Input = Instance.new("TextBox")
-    Input.Parent = Box
-    Input.Size = UDim2.new(1, -10, 0, 25)
-    Input.Position = UDim2.new(0, 5, 0, 5)
-    Input.PlaceholderText = "اكتب اسم اللاعب"
-    Input.TextColor3 = Color3.new(1,1,1)
-    Input.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    Input.BorderSizePixel = 0
+-- اماكن اللاعبين
+local Slots = {}
+for i=1,4 do
+    local Slot = Instance.new("Frame")
+    Slot.Size = UDim2.new(0.5,-10,0.5,-30)
+    Slot.Position = UDim2.new(((i-1)%2)*0.5,5,math.floor((i-1)/2)*0.5,30)
+    Slot.BackgroundColor3 = Color3.fromRGB(35,35,35)
+    Slot.Parent = MainFrame
 
     local Avatar = Instance.new("ImageLabel")
-    Avatar.Parent = Box
-    Avatar.Size = UDim2.new(0, 60, 0, 60)
-    Avatar.Position = UDim2.new(0, 5, 0, 35)
+    Avatar.Size = UDim2.new(0,60,0,60)
+    Avatar.Position = UDim2.new(0,5,0,5)
     Avatar.BackgroundTransparency = 1
+    Avatar.Parent = Slot
 
-    local JoinLabel = Instance.new("TextLabel")
-    JoinLabel.Parent = Box
-    JoinLabel.Size = UDim2.new(1, -75, 0, 25)
-    JoinLabel.Position = UDim2.new(0, 70, 0, 40)
-    JoinLabel.Text = "✅ دخول: 0"
-    JoinLabel.TextColor3 = Color3.fromRGB(0,255,0)
-    JoinLabel.BackgroundTransparency = 1
-    JoinLabel.TextXAlignment = Enum.TextXAlignment.Left
+    local NameBox = Instance.new("TextBox")
+    NameBox.Size = UDim2.new(1,-75,0,30)
+    NameBox.Position = UDim2.new(0,70,0,5)
+    NameBox.PlaceholderText = "اكتب اسم اللاعب"
+    NameBox.TextColor3 = Color3.fromRGB(255,255,255)
+    NameBox.BackgroundColor3 = Color3.fromRGB(45,45,45)
+    NameBox.Parent = Slot
 
-    local LeaveLabel = Instance.new("TextLabel")
-    LeaveLabel.Parent = Box
-    LeaveLabel.Size = UDim2.new(1, -75, 0, 25)
-    LeaveLabel.Position = UDim2.new(0, 70, 0, 65)
-    LeaveLabel.Text = "❌ خروج: 0"
-    LeaveLabel.TextColor3 = Color3.fromRGB(255,0,0)
-    LeaveLabel.BackgroundTransparency = 1
-    LeaveLabel.TextXAlignment = Enum.TextXAlignment.Left
+    local NickLabel = Instance.new("TextLabel")
+    NickLabel.Size = UDim2.new(1,-75,0,25)
+    NickLabel.Position = UDim2.new(0,70,0,40)
+    NickLabel.BackgroundTransparency = 1
+    NickLabel.TextColor3 = Color3.fromRGB(200,200,200)
+    NickLabel.Text = "لاعب غير محدد"
+    NickLabel.Parent = Slot
 
-    local state = {player=nil, joins=0, leaves=0}
+    local Status = Instance.new("TextLabel")
+    Status.Size = UDim2.new(1,-10,0,25)
+    Status.Position = UDim2.new(0,5,0,70)
+    Status.BackgroundTransparency = 1
+    Status.TextColor3 = Color3.fromRGB(0,255,0)
+    Status.Text = "✅ دخول: 0   ❌ خروج: 0"
+    Status.Parent = Slot
 
-    -- اختيار اللاعب
-    Input.FocusLost:Connect(function()
-        local txt = Input.Text:lower()
-        if txt == "" then
-            state.player = nil
-            Avatar.Image = ""
-            JoinLabel.Text = "✅ دخول: 0"
-            LeaveLabel.Text = "❌ خروج: 0"
-            return
-        end
-        for _,plr in ipairs(Players:GetPlayers()) do
-            if plr.Name:lower():sub(1,#txt) == txt or plr.DisplayName:lower():sub(1,#txt) == txt then
-                state.player = plr.Name
-                state.joins, state.leaves = 0, 0
-                Avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId="..plr.UserId.."&width=100&height=100&format=png"
-                JoinLabel.Text = "✅ دخول: 0"
-                LeaveLabel.Text = "❌ خروج: 0"
-                break
-            end
-        end
-    end)
-
-    -- متابعة الدخول والخروج
-    Players.PlayerAdded:Connect(function(plr)
-        if state.player and plr.Name == state.player then
-            state.joins += 1
-            JoinLabel.Text = "✅ دخول: "..state.joins
-        end
-    end)
-    Players.PlayerRemoving:Connect(function(plr)
-        if state.player and plr.Name == state.player then
-            state.leaves += 1
-            LeaveLabel.Text = "❌ خروج: "..state.leaves
-        end
-    end)
-
-    return Box
+    Slots[i] = {Box=NameBox,Nick=NickLabel,Avatar=Avatar,Status=Status,CountIn=0,CountOut=0}
 end
 
--- ٤ أماكن للاعبين (2 فوق / 2 تحت)
-createPlayerBox(MainFrame, UDim2.new(0, 10, 0, 50))
-createPlayerBox(MainFrame, UDim2.new(0.5, 5, 0, 50))
-createPlayerBox(MainFrame, UDim2.new(0, 10, 0.5, 5))
-createPlayerBox(MainFrame, UDim2.new(0.5, 5, 0.5, 5))
+-- تحديث بيانات
+local function UpdateSlot(slot,player)
+    if player then
+        local userId = player.UserId
+        local thumbType = Enum.ThumbnailType.HeadShot
+        local thumbSize = Enum.ThumbnailSize.Size100x100
+        local content = Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+        slot.Avatar.Image = content
+        slot.Nick.Text = "@"..player.Name
+    else
+        slot.Avatar.Image = ""
+        slot.Nick.Text = "لاعب غير محدد"
+    end
+end
+
+-- دخول اللاعب
+Players.PlayerAdded:Connect(function(player)
+    for _,slot in ipairs(Slots) do
+        if slot.Box.Text ~= "" and player.Name:lower():sub(1,#slot.Box.Text) == slot.Box.Text:lower() then
+            slot.CountIn += 1
+            slot.Status.Text = "✅ دخول: "..slot.CountIn.."   ❌ خروج: "..slot.CountOut
+            UpdateSlot(slot,player)
+            JoinSound:Play() -- تشغيل صوت دخول
+        end
+    end
+end)
+
+-- خروج اللاعب
+Players.PlayerRemoving:Connect(function(player)
+    for _,slot in ipairs(Slots) do
+        if slot.Box.Text ~= "" and player.Name:lower():sub(1,#slot.Box.Text) == slot.Box.Text:lower() then
+            slot.CountOut += 1
+            slot.Status.Text = "✅ دخول: "..slot.CountIn.."   ❌ خروج: "..slot.CountOut
+            UpdateSlot(slot,nil)
+            LeaveSound:Play() -- تشغيل صوت خروج
+        end
+    end
+end)
+
+-- فتح/قفل
+ToggleButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
