@@ -1,355 +1,284 @@
---[[
-  ✨ العم حكومه 🍷 | GS4 👑 — تتبع 4 (نسخة مستقرة بدون لاج)
-  - لا يضيف لاعبين تلقائياً: يظهر فقط عند التقاط الاسم/اللقب من البحث.
-  - تايمر حقيقي يبدأ من لحظة التتبع + “دخل الماب” لمن يدخل بعد تشغيل السكربت.
-  - زر فتح/قفل صغير قابل للسحب.
-  - تحديث تايمرات موحّد كل ثانية (أداء أفضل).
-  - صورة أفاتار من GetUserThumbnailAsync (رسمي).
-  ملاحظة تقنية: اللاعبين الموجودين قبل تشغيل السكربت لن نعرف وقت دخولهم الحقيقي من الكلاينت،
-  فنعرض وقت التتبع فقط لهم. أي لاعب يدخل بعد كده بنسجّل دخوله الحقيقي لحظياً.
-]]
+-- V10 Ultra Max AutoTrack – Player Tracker
+-- 「👑GS4」العم حكومه🍷
 
--- Services
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
 
-local localPlayer = Players.LocalPlayer
+--==================== UI ====================--
+local gui = Instance.new("ScreenGui")
+gui.Name = "GS4_Al3mHkoomh_V10"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- ===== GUI =====
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "GS4Tracker"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 620, 0, 640) -- واجهة طويلة وكبيرة
+frame.Position = UDim2.new(0.18, 0, 0.12, 0)
+frame.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+frame.Active = true
+frame.Draggable = true
+frame.BorderSizePixel = 0
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
 
--- زر فتح/قفل صغير قابل للسحب
-local Toggle = Instance.new("TextButton")
-Toggle.Name = "GS4_Toggle"
-Toggle.Size = UDim2.new(0, 36, 0, 36)
-Toggle.Position = UDim2.new(0.85, 0, 0.1, 0)
-Toggle.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-Toggle.Text = "≡"
-Toggle.TextScaled = true
-Toggle.TextColor3 = Color3.fromRGB(255,255,255)
-Toggle.AutoButtonColor = true
-Toggle.Parent = ScreenGui
-do
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 18)
-    corner.Parent = Toggle
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, -20, 0, 54)
+topBar.Position = UDim2.new(0, 10, 0, 10)
+topBar.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+topBar.BorderSizePixel = 0
+topBar.Parent = frame
+Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Size = UDim2.new(1, -16, 1, 0)
+title.Position = UDim2.new(0, 8, 0, 0)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = Color3.fromRGB(0, 190, 255) -- أزرق
+title.Text = "「👑GS4」العم حكومه🍷 — Player Tracker V10"
+title.Parent = topBar
+
+local body = Instance.new("Frame")
+body.BackgroundTransparency = 1
+body.Size = UDim2.new(1, -20, 1, -74)
+body.Position = UDim2.new(0, 10, 0, 64)
+body.Parent = frame
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 10)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.Parent = body
+
+-- شريط البحث (خانة كتابة فقط – AutoTrack)
+local tools = Instance.new("Frame")
+tools.Size = UDim2.new(1, 0, 0, 48)
+tools.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+tools.BorderSizePixel = 0
+tools.Parent = body
+Instance.new("UICorner", tools).CornerRadius = UDim.new(0, 10)
+
+local search = Instance.new("TextBox")
+search.Size = UDim2.new(1, -20, 1, -10)
+search.Position = UDim2.new(0, 10, 0, 5)
+search.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+search.BorderSizePixel = 0
+search.PlaceholderText = "اكتب أول حرفين على الأقل من اليوزر/اللقب… (AutoTrack)"
+search.ClearTextOnFocus = false
+search.Text = ""
+search.TextColor3 = Color3.fromRGB(255, 255, 255)
+search.PlaceholderColor3 = Color3.fromRGB(160, 160, 170)
+search.Font = Enum.Font.Gotham
+search.TextSize = 16
+search.Parent = tools
+Instance.new("UICorner", search).CornerRadius = UDim.new(0, 8)
+
+-- بطاقة اللاعب
+local card = Instance.new("Frame")
+card.Size = UDim2.new(1, 0, 0, 160)
+card.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+card.BorderSizePixel = 0
+card.Parent = body
+Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
+
+local avatar = Instance.new("ImageLabel")
+avatar.Size = UDim2.new(0, 110, 0, 110)
+avatar.Position = UDim2.new(0, 14, 0, 14)
+avatar.BackgroundTransparency = 1
+avatar.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+avatar.Parent = card
+
+local username = Instance.new("TextLabel")
+username.BackgroundTransparency = 1
+username.Size = UDim2.new(1, -150, 0, 36)
+username.Position = UDim2.new(0, 140, 0, 16)
+username.Font = Enum.Font.GothamBold
+username.TextSize = 20
+username.TextXAlignment = Enum.TextXAlignment.Left
+username.TextColor3 = Color3.fromRGB(0, 200, 255)
+username.Text = "👤 اليوزر: —"
+username.Parent = card
+
+local displayName = Instance.new("TextLabel")
+displayName.BackgroundTransparency = 1
+displayName.Size = UDim2.new(1, -150, 0, 30)
+displayName.Position = UDim2.new(0, 140, 0, 54)
+displayName.Font = Enum.Font.Gotham
+displayName.TextSize = 18
+displayName.TextXAlignment = Enum.TextXAlignment.Left
+displayName.TextColor3 = Color3.fromRGB(230, 230, 235)
+displayName.Text = "🏷️ اللقب: —"
+displayName.Parent = card
+
+local times = Instance.new("TextLabel")
+times.BackgroundTransparency = 1
+times.Size = UDim2.new(1, -150, 0, 30)
+times.Position = UDim2.new(0, 140, 0, 90)
+times.Font = Enum.Font.Gotham
+times.TextSize = 15
+times.TextXAlignment = Enum.TextXAlignment.Left
+times.TextColor3 = Color3.fromRGB(180, 200, 255)
+times.Text = "🕒 دخل: —   |   ⏳ تتبع من: —"
+times.Parent = card
+
+-- صندوق السجل (طويل + Scroll)
+local logBox = Instance.new("ScrollingFrame")
+logBox.Size = UDim2.new(1, 0, 1, -180)
+logBox.CanvasSize = UDim2.new(0, 0, 0, 0)
+logBox.ScrollBarThickness = 6
+logBox.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+logBox.BorderSizePixel = 0
+logBox.Parent = body
+Instance.new("UICorner", logBox).CornerRadius = UDim.new(0, 10)
+
+local logLayout = Instance.new("UIListLayout")
+logLayout.Padding = UDim.new(0, 6)
+logLayout.SortOrder = Enum.SortOrder.LayoutOrder
+logLayout.Parent = logBox
+
+--==================== DATA ====================--
+local trackedPlayer = nil
+local trackStart = nil
+local joinTimes = {} -- userId -> os.time() لوقت الدخول
+
+-- تجهيز الموجودين حالاً
+for _, plr in ipairs(Players:GetPlayers()) do
+	if plr ~= LocalPlayer then
+		joinTimes[plr.UserId] = joinTimes[plr.UserId] or os.time()
+	end
 end
 
--- سحب الزر
-do
-    local dragging = false
-    local dragStart, startPos
-    local function update(input)
-        local delta = input.Position - dragStart
-        Toggle.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-    Toggle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = Toggle.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            update(input)
-        end
-    end)
+--==================== HELPERS ====================--
+local function fmt(t)
+	return os.date("%X", t)
 end
 
--- الإطار الرئيسي
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "GS4_Main"
-MainFrame.Size = UDim2.new(0, 480, 0, 340)
-MainFrame.Position = UDim2.new(0.25, 0, 0.22, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20,20,30)
-MainFrame.BorderSizePixel = 0
-MainFrame.Visible = true
-MainFrame.Parent = ScreenGui
-do
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 14)
-    corner.Parent = MainFrame
+local function addLog(text, color3)
+	local line = Instance.new("TextLabel")
+	line.BackgroundTransparency = 1
+	line.Font = Enum.Font.Code
+	line.TextSize = 15
+	line.TextXAlignment = Enum.TextXAlignment.Left
+	line.TextYAlignment = Enum.TextYAlignment.Center
+	line.TextWrapped = true
+	line.Text = "[" .. os.date("%X") .. "] " .. text
+	line.Size = UDim2.new(1, -14, 0, 22)
+	line.TextColor3 = color3 or Color3.fromRGB(220, 255, 235)
+	line.Parent = logBox
+	task.wait()
+	logBox.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y + 20)
+	logBox.CanvasPosition = Vector2.new(0, math.max(0, logBox.CanvasSize.Y.Offset - logBox.AbsoluteWindowSize.Y))
 end
 
-Toggle.MouseButton1Click:Connect(function()
-    MainFrame.Visible = not MainFrame.Visible
-end)
-
--- العنوان
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -12, 0, 38)
-Title.Position = UDim2.new(0, 6, 0, 4)
-Title.BackgroundTransparency = 1
-Title.Text = "✨ العم حكومه 🍷 | GS4 👑"
-Title.TextColor3 = Color3.fromRGB(0,170,255)
-Title.TextScaled = true
-Title.Font = Enum.Font.GothamBold
-Title.Parent = MainFrame
-
--- حاوية الكروت
-local CardsFrame = Instance.new("Frame")
-CardsFrame.Size = UDim2.new(1, -12, 1, -96)
-CardsFrame.Position = UDim2.new(0, 6, 0, 44)
-CardsFrame.BackgroundTransparency = 1
-CardsFrame.Parent = MainFrame
-
-local Grid = Instance.new("UIGridLayout")
-Grid.Parent = CardsFrame
-Grid.CellSize = UDim2.new(0, 226, 0, 136) -- 2x2 بحجم صغير
-Grid.CellPadding = UDim2.new(0, 8, 0, 8)
-Grid.FillDirectionMaxCells = 2
-
--- مربع البحث
-local SearchBox = Instance.new("TextBox")
-SearchBox.Size = UDim2.new(0.96, 0, 0, 32)
-SearchBox.Position = UDim2.new(0.02, 0, 1, -40)
-SearchBox.PlaceholderText = "🔍 اكتب أول حروف (يوزر أو لقب)..."
-SearchBox.Text = ""
-SearchBox.Font = Enum.Font.GothamBold
-SearchBox.TextScaled = true
-SearchBox.TextColor3 = Color3.fromRGB(255,255,255)
-SearchBox.BackgroundColor3 = Color3.fromRGB(35,35,45)
-SearchBox.Parent = MainFrame
-do
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = SearchBox
+local function bestMatch(query)
+	query = (query or ""):lower()
+	if #query < 2 then return nil end -- من أول حرفين
+	local best, rank
+	local function score(plr)
+		local n, d = plr.Name:lower(), plr.DisplayName:lower()
+		if n:sub(1, #query) == query then return 1 end
+		if d:sub(1, #query) == query then return 2 end
+		if string.find(n, query, 1, true) then return 3 end
+		if string.find(d, query, 1, true) then return 4 end
+		return math.huge
+	end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer then
+			local s = score(plr)
+			if s < math.huge and (not best or s < rank) then
+				best, rank = plr, s
+			end
+		end
+	end
+	return best
 end
 
--- ===== المنطق =====
-local MAX_CARDS = 4
-local tracked = {}        -- [userId] = cardData
-local order = {}          -- ترتيب الإضافة (علشان نستبدل الأقدم لو امتلينا)
-local joinTimes = {}      -- وقت دخول الماب الحقيقي لمن يدخل بعد تشغيل السكربت
-local leftTimes = {}      -- وقت الخروج (نثبّت التايمر)
-
--- بطاقة لاعب
-local function makeCard(player: Player, trackStartUnix: number)
-    -- لو عندنا 4، نشيل أقدم واحد
-    if #order >= MAX_CARDS then
-        local oldUserId = table.remove(order, 1)
-        if tracked[oldUserId] and tracked[oldUserId].frame then
-            tracked[oldUserId].frame:Destroy()
-        end
-        tracked[oldUserId] = nil
-    end
-
-    local frame = Instance.new("Frame")
-    frame.BackgroundColor3 = Color3.fromRGB(35,35,45)
-    frame.Parent = CardsFrame
-    do
-        local c = Instance.new("UICorner")
-        c.CornerRadius = UDim.new(0, 10)
-        c.Parent = frame
-    end
-
-    -- هالة خفيفة عند الإضافة
-    do
-        frame.BackgroundTransparency = 0.2
-        TweenService:Create(frame, TweenInfo.new(0.25), {BackgroundTransparency = 0}):Play()
-    end
-
-    -- أفاتار
-    local avatar = Instance.new("ImageLabel")
-    avatar.Size = UDim2.new(0, 54, 0, 54)
-    avatar.Position = UDim2.new(0, 6, 0, 6)
-    avatar.BackgroundTransparency = 1
-    avatar.Image = "rbxassetid://0"
-    avatar.Parent = frame
-
-    -- اسم المستخدم
-    local userLabel = Instance.new("TextLabel")
-    userLabel.Size = UDim2.new(1, -68, 0, 24)
-    userLabel.Position = UDim2.new(0, 66, 0, 6)
-    userLabel.BackgroundTransparency = 1
-    userLabel.Text = "👤 " .. player.Name
-    userLabel.TextColor3 = Color3.fromRGB(150, 200, 255)
-    userLabel.TextScaled = true
-    userLabel.Font = Enum.Font.GothamBold
-    userLabel.Parent = frame
-
-    -- اللقب
-    local dispLabel = Instance.new("TextLabel")
-    dispLabel.Size = UDim2.new(1, -68, 0, 22)
-    dispLabel.Position = UDim2.new(0, 66, 0, 30)
-    dispLabel.BackgroundTransparency = 1
-    dispLabel.Text = "⭐ " .. player.DisplayName
-    dispLabel.TextColor3 = Color3.fromRGB(255, 220, 180)
-    dispLabel.TextScaled = true
-    dispLabel.Font = Enum.Font.GothamBold
-    dispLabel.Parent = frame
-
-    -- دخل الماب (إن توفر)
-    local joinLabel = Instance.new("TextLabel")
-    joinLabel.Size = UDim2.new(1, -68, 0, 18)
-    joinLabel.Position = UDim2.new(0, 66, 0, 54)
-    joinLabel.BackgroundTransparency = 1
-    joinLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-    joinLabel.TextScaled = true
-    joinLabel.Font = Enum.Font.GothamSemiBold
-    joinLabel.Parent = frame
-
-    local jt = joinTimes[player.UserId]
-    if jt then
-        joinLabel.Text = "🟢 دخل: " .. os.date("%X", jt)
-    else
-        joinLabel.Text = "🟢 دخل: —"
-    end
-
-    -- بدأ التتبع
-    local trackLabel = Instance.new("TextLabel")
-    trackLabel.Size = UDim2.new(1, -68, 0, 18)
-    trackLabel.Position = UDim2.new(0, 66, 0, 74)
-    trackLabel.BackgroundTransparency = 1
-    trackLabel.Text = "🔎 تتبع من: " .. os.date("%X", trackStartUnix)
-    trackLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
-    trackLabel.TextScaled = true
-    trackLabel.Font = Enum.Font.GothamSemiBold
-    trackLabel.Parent = frame
-
-    -- تايمر
-    local timer = Instance.new("TextLabel")
-    timer.Size = UDim2.new(1, -12, 0, 26)
-    timer.Position = UDim2.new(0, 6, 0, 102)
-    timer.BackgroundTransparency = 1
-    timer.TextColor3 = Color3.fromRGB(150, 150, 255)
-    timer.TextScaled = true
-    timer.Font = Enum.Font.GothamBold
-    timer.Text = "⏳ 00:00:00"
-    timer.Parent = frame
-
-    -- صورة الأفاتار (رسمي)
-    task.spawn(function()
-        local ok, url = pcall(function()
-            local image, isReady = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-            return image
-        end)
-        if ok and url then avatar.Image = url end
-    end)
-
-    -- احفظ البيانات
-    tracked[player.UserId] = {
-        frame = frame,
-        player = player,
-        trackStart = trackStartUnix,
-        timerLabel = timer,
-        left = false,
-    }
-    table.insert(order, player.UserId)
+local function setAvatar(userId)
+	local ok, url, _ = pcall(Players.GetUserThumbnailAsync, Players, userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+	if ok and url then
+		avatar.Image = url
+	end
 end
 
--- حذف بطاقة
-local function removeCard(userId:number, markLeft:boolean)
-    local data = tracked[userId]
-    if not data then return end
-    if markLeft and data.timerLabel then
-        data.left = true
-        data.timerLabel.Text = "🚪 خرج"
-        data.timerLabel.TextColor3 = Color3.fromRGB(255,0,0)
-        -- خليه باين إنه خرج بدل ما نمسحه فوراً
-        TweenService:Create(data.frame, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45,25,25)}):Play()
-        -- امسحه بعد شوية
-        task.delay(2.0, function()
-            if data.frame then data.frame:Destroy() end
-        end)
-    else
-        if data.frame then data.frame:Destroy() end
-    end
-    -- شيل من الترتيب
-    for i, uid in ipairs(order) do
-        if uid == userId then table.remove(order, i) break end
-    end
-    tracked[userId] = nil
+local function updateCard(plr)
+	if not plr then
+		username.Text = "👤 اليوزر: —"
+		displayName.Text = "🏷️ اللقب: —"
+		times.Text = "🕒 دخل: —   |   ⏳ تتبع من: —"
+		avatar.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+		return
+	end
+	username.Text = "👤 اليوزر: " .. plr.Name
+	displayName.Text = "🏷️ اللقب: " .. (plr.DisplayName or "—")
+	local jt = joinTimes[plr.UserId]
+	local ts = trackStart
+	times.Text = string.format("🕒 دخل: %s   |   ⏳ تتبع من: %s", jt and fmt(jt) or "—", ts and fmt(ts) or "—")
+	setAvatar(plr.UserId)
 end
 
--- تحديث تايمرات كل ثانية (موحّد)
-do
-    local acc = 0
-    RunService.Heartbeat:Connect(function(dt)
-        acc += dt
-        if acc < 1 then return end
-        acc = 0
-        local now = os.time()
-        for _, data in pairs(tracked) do
-            if not data.left and data.timerLabel and data.trackStart then
-                local elapsed = now - data.trackStart
-                if elapsed < 0 then elapsed = 0 end
-                local h = math.floor(elapsed / 3600)
-                local m = math.floor((elapsed % 3600) / 60)
-                local s = elapsed % 60
-                data.timerLabel.Text = string.format("⏳ %02d:%02d:%02d", h, m, s)
-            end
-        end
-    end)
+local function startTracking(plr)
+	if trackedPlayer ~= plr then
+		trackedPlayer = plr
+		trackStart = os.time()
+		updateCard(plr)
+		addLog("بدء تتبع: " .. plr.Name, Color3.fromRGB(120, 255, 120))
+	end
 end
 
--- التقاط بالبحث (يلقط من أول حروف اليوزر أو اللقب، أو حتى جزء من النص)
-local function tryTrackByQuery(q:string)
-    q = q:lower()
-    if #q < 2 then return end -- لتجنب اللقط العشوائي من حرف واحد
-    -- أفضلية: يبدأ بالاسم > يبدأ باللقب > يحتوي الاسم > يحتوي اللقب
-    local best
-    local function score(plr)
-        local n, d = plr.Name:lower(), plr.DisplayName:lower()
-        if n:sub(1, #q) == q then return 1 end
-        if d:sub(1, #q) == q then return 2 end
-        if string.find(n, q, 1, true) then return 3 end
-        if string.find(d, q, 1, true) then return 4 end
-        return math.huge
-    end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= localPlayer then
-            local sc = score(plr)
-            if sc < math.huge and not tracked[plr.UserId] then
-                if not best or sc < best.sc then
-                    best = {plr = plr, sc = sc}
-                end
-            end
-        end
-    end
-    if best and best.plr then
-        makeCard(best.plr, os.time())
-        -- فلاش بسيط تأكيد الالتقاط
-        TweenService:Create(MainFrame, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(26,26,38)}):Play()
-        task.delay(0.14, function()
-            TweenService:Create(MainFrame, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(20,20,30)}):Play()
-        end)
-    end
+--==================== AUTOTRACK ====================--
+local lastQ = ""
+local typingDebounce = false
+
+local function onQueryChanged()
+	if typingDebounce then return end
+	typingDebounce = true
+	task.delay(0.08, function() typingDebounce = false end)
+
+	local q = search.Text or ""
+	if q == lastQ then return end
+	lastQ = q
+
+	local plr = bestMatch(q)
+	if plr then startTracking(plr) end
 end
 
--- تغيّر البحث
-SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-    tryTrackByQuery(SearchBox.Text)
-end)
+search:GetPropertyChangedSignal("Text"):Connect(onQueryChanged)
+search.FocusLost:Connect(function(enter) if enter then onQueryChanged() end end)
 
--- دخول/خروج حقيقيين
+--==================== EVENTS ====================--
 Players.PlayerAdded:Connect(function(plr)
-    -- سجّل وقت دخول الماب الحقيقي للاعبين الجدد
-    joinTimes[plr.UserId] = os.time()
+	joinTimes[plr.UserId] = os.time()
+	addLog("دخول: " .. plr.Name, Color3.fromRGB(0, 200, 255))
+	if trackedPlayer and plr.Name == trackedPlayer.Name then
+		updateCard(plr)
+	end
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
-    leftTimes[plr.UserId] = os.time()
-    if tracked[plr.UserId] then
-        removeCard(plr.UserId, true) -- علّمه أنه خرج وبعدين امسحه
-    end
+	addLog("خروج: " .. plr.Name, Color3.fromRGB(255, 90, 90))
+	if trackedPlayer and plr.Name == trackedPlayer.Name then
+		times.Text = (times.Text .. "   |   🚪 خرج: " .. os.date("%X"))
+	end
 end)
 
--- لا نضيف أي لاعب تلقائيًا هنا (عشان ما يلقطش لوحده)
--- اللاعبين الموجودين بالفعل قبل تشغيل السكربت: joinTimes مش متوفر لهم (بنظهر "—")، والتتبع يبدأ عند الالتقاط.
-
--- اختياري: اضغط Enter يعمل محاولة لالتقاط سريع
-SearchBox.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        tryTrackByQuery(SearchBox.Text)
-    end
+-- عدّاد زمن التتبع الظاهر على البطاقة
+local acc = 0
+RunService.Heartbeat:Connect(function(dt)
+	acc += dt
+	if acc >= 1 then
+		acc = 0
+		if trackedPlayer and trackStart then
+			local elapsed = os.time() - trackStart
+			local h = math.floor(elapsed / 3600)
+			local m = math.floor((elapsed % 3600) / 60)
+			local s = elapsed % 60
+			local jt = joinTimes[trackedPlayer.UserId]
+			times.Text = string.format("🕒 دخل: %s   |   ⏳ تتبع من: %s   |   ⏲️ %02d:%02d:%02d",
+				jt and fmt(jt) or "—",
+				fmt(trackStart),
+				h, m, s
+			)
+		end
+	end
 end)
