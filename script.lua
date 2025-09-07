@@ -1,146 +1,164 @@
--- صنع حكومه | كلان EG - تتبع 4 لاعبين
--- Script by M1
+-- LocalScript يوضع داخل StarterGui
+
+-- صنع حكومه | كلان EG - تتبع 4 لاعبين --
 
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
--- GUI
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- زرار فتح/قفل
-local Toggle = Instance.new("TextButton", ScreenGui)
-Toggle.Size = UDim2.new(0, 50, 0, 50)
-Toggle.Position = UDim2.new(0, 10, 0.4, 0)
-Toggle.Text = "☰"
-Toggle.TextSize = 28
-Toggle.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
-Toggle.TextColor3 = Color3.fromRGB(255,255,255)
+-- GUI الرئيسي
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "TrackingGUI"
+screenGui.Parent = playerGui
 
--- Main Frame
-local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 600, 0, 400)
-Main.Position = UDim2.new(0.5, -300, 0.1, 0)
-Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Main.Visible = false
+-- زر فتح/إخفاء القائمة
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 140, 0, 40)
+toggleButton.Position = UDim2.new(0, 20, 0.5, -20)
+toggleButton.Text = "فتح قائمة التتبع"
+toggleButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+toggleButton.TextColor3 = Color3.fromRGB(0, 170, 255)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 16
+toggleButton.Parent = screenGui
+toggleButton.ZIndex = 10
 
-local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.BackgroundTransparency = 1
-Title.Text = "صنع حكومه | كلان EG - تتبع 4 لاعبين"
-Title.TextColor3 = Color3.fromRGB(0, 150, 255)
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 22
+-- الإطار الرئيسي
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 400)
+mainFrame.Position = UDim2.new(0, -310, 0.5, -200)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
 
--- زرار يفتح ويقفل القايمة
-Toggle.MouseButton1Click:Connect(function()
-    Main.Visible = not Main.Visible
-end)
+-- حقوق
+local credits = Instance.new("TextLabel")
+credits.Size = UDim2.new(1, 0, 0, 30)
+credits.BackgroundTransparency = 1
+credits.Text = "صنع حكومه | كلان EG - تتبع 4 لاعبين"
+credits.TextColor3 = Color3.fromRGB(0, 170, 255)
+credits.Font = Enum.Font.GothamBold
+credits.TextSize = 14
+credits.Parent = mainFrame
 
--- Slots (4 لاعبين)
-local slots = {}
+-- مربع البحث
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -20, 0, 30)
+searchBox.Position = UDim2.new(0, 10, 0, 40)
+searchBox.PlaceholderText = "اكتب أول حرفين من الاسم..."
+searchBox.Text = ""
+searchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 14
+searchBox.Parent = mainFrame
 
+-- إطار اللاعبين
+local playersFrame = Instance.new("Frame")
+playersFrame.Size = UDim2.new(1, -20, 0, 300)
+playersFrame.Position = UDim2.new(0, 10, 0, 80)
+playersFrame.BackgroundTransparency = 1
+playersFrame.Parent = mainFrame
+
+-- قوالب لعرض 4 لاعبين
+local playerSlots = {}
 for i = 1, 4 do
-    local slot = Instance.new("Frame", Main)
-    slot.Size = UDim2.new(0.48, 0, 0.35, 0)
-    slot.Position = UDim2.new((i-1)%2 * 0.5 + 0.02, 0, math.floor((i-1)/2)*0.4 + 0.2, 0)
+    local slot = Instance.new("Frame")
+    slot.Size = UDim2.new(1, 0, 0, 60)
+    slot.Position = UDim2.new(0, 0, 0, (i - 1) * 70)
     slot.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    slot.Visible = true
-    
-    local Avatar = Instance.new("ImageLabel", slot)
-    Avatar.Size = UDim2.new(0,80,0,80)
-    Avatar.Position = UDim2.new(0,10,0,10)
-    Avatar.BackgroundTransparency = 1
-    
-    local NameLabel = Instance.new("TextLabel", slot)
-    NameLabel.Size = UDim2.new(1,-100,0,25)
-    NameLabel.Position = UDim2.new(0,100,0,10)
-    NameLabel.BackgroundTransparency = 1
-    NameLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    NameLabel.TextSize = 18
-    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    NameLabel.Text = "انتظار..."
-    
-    local ClanLabel = Instance.new("TextLabel", slot)
-    ClanLabel.Size = UDim2.new(1,-100,0,20)
-    ClanLabel.Position = UDim2.new(0,100,0,40)
-    ClanLabel.BackgroundTransparency = 1
-    ClanLabel.TextColor3 = Color3.fromRGB(0,200,255)
-    ClanLabel.TextSize = 16
-    ClanLabel.TextXAlignment = Enum.TextXAlignment.Left
-    ClanLabel.Text = "الكلان: EG"
-    
-    local TimeLabel = Instance.new("TextLabel", slot)
-    TimeLabel.Size = UDim2.new(1,-100,0,20)
-    TimeLabel.Position = UDim2.new(0,100,0,70)
-    TimeLabel.BackgroundTransparency = 1
-    TimeLabel.TextColor3 = Color3.fromRGB(0,255,0)
-    TimeLabel.TextSize = 16
-    TimeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TimeLabel.Text = "الوقت: 00:00:00"
-    
-    slots[i] = {
-        frame = slot,
-        avatar = Avatar,
-        name = NameLabel,
-        clan = ClanLabel,
-        time = TimeLabel,
-        player = nil,
-        startTime = 0
-    }
+    slot.BorderSizePixel = 0
+    slot.Parent = playersFrame
+
+    local thumb = Instance.new("ImageLabel")
+    thumb.Size = UDim2.new(0, 50, 0, 50)
+    thumb.Position = UDim2.new(0, 5, 0, 5)
+    thumb.BackgroundTransparency = 1
+    thumb.Image = ""
+    thumb.Parent = slot
+
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, -70, 0, 25)
+    nameLabel.Position = UDim2.new(0, 65, 0, 5)
+    nameLabel.Text = "الاسم: ..."
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.Font = Enum.Font.Gotham
+    nameLabel.TextSize = 14
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Parent = slot
+
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(1, -70, 0, 20)
+    statusLabel.Position = UDim2.new(0, 65, 0, 30)
+    statusLabel.Text = "الحالة: غير معروف"
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    statusLabel.Font = Enum.Font.Gotham
+    statusLabel.TextSize = 12
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Parent = slot
+
+    playerSlots[i] = {frame = slot, thumb = thumb, name = nameLabel, status = statusLabel}
 end
 
--- دالة تتبع لاعب
-local function trackPlayer(slot, plr)
-    local info = slots[slot]
-    info.player = plr
-    info.startTime = tick()
-    info.name.Text = "الاسم: "..plr.Name
-    info.clan.Text = "الكلان: EG"
-    
-    -- صورة افاتار
-    local thumb = Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-    info.avatar.Image = thumb
+-- تحديث بيانات اللاعبين
+local function updatePlayers(filter)
+    local foundPlayers = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            if filter == nil or string.len(filter) < 2 
+            or string.find(string.lower(plr.Name), string.lower(filter)) 
+            or string.find(string.lower(plr.DisplayName), string.lower(filter)) then
+                table.insert(foundPlayers, plr)
+            end
+        end
+    end
+
+    for i = 1, 4 do
+        local slot = playerSlots[i]
+        if foundPlayers[i] then
+            local plr = foundPlayers[i]
+            slot.name.Text = "الاسم: " .. plr.DisplayName .. "(@" .. plr.Name .. ")"
+            slot.status.Text = "الحالة: متصل"
+            Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            local thumb, _ = Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            slot.thumb.Image = thumb
+        else
+            slot.name.Text = "فارغ"
+            slot.status.Text = "..."
+            slot.thumb.Image = ""
+        end
+    end
 end
 
--- توزيع أول 4 لاعبين
-for i,plr in ipairs(Players:GetPlayers()) do
-    if i <= 4 then
-        trackPlayer(i, plr)
-    end
-end
-
--- تحديث الوقت
-RunService.RenderStepped:Connect(function()
-    for i,slot in ipairs(slots) do
-        if slot.player then
-            local elapsed = tick() - slot.startTime
-            local h = math.floor(elapsed/3600)
-            local m = math.floor((elapsed%3600)/60)
-            local s = math.floor(elapsed%60)
-            slot.time.Text = string.format("الوقت: %02d:%02d:%02d", h,m,s)
-        end
-    end
+-- حدث البحث
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    updatePlayers(searchBox.Text)
 end)
 
--- لو لاعب جديد دخل
-Players.PlayerAdded:Connect(function(plr)
-    for i,slot in ipairs(slots) do
-        if not slot.player then
-            trackPlayer(i, plr)
-            break
-        end
-    end
+-- تحديث عند دخول/خروج لاعب
+Players.PlayerAdded:Connect(function()
+    updatePlayers(searchBox.Text)
+end)
+Players.PlayerRemoving:Connect(function()
+    updatePlayers(searchBox.Text)
 end)
 
--- لو لاعب خرج
-Players.PlayerRemoving:Connect(function(plr)
-    for i,slot in ipairs(slots) do
-        if slot.player == plr then
-            slot.player = nil
-            slot.name.Text = "انتظار..."
-            slot.avatar.Image = ""
-            slot.time.Text = "الوقت: 00:00:00"
-        end
+-- زر فتح/إغلاق
+local opened = false
+toggleButton.MouseButton1Click:Connect(function()
+    opened = not opened
+    local goal = {}
+    if opened then
+        goal.Position = UDim2.new(0, 20, 0.5, -200)
+    else
+        goal.Position = UDim2.new(0, -310, 0.5, -200)
     end
+    TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal):Play()
 end)
+
+-- أول تحديث
+updatePlayers(nil)
