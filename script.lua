@@ -1,9 +1,7 @@
--- ======================================================
--- LocalScript: EG Player Tracker (نسخة نهائية بالعربي)
--- وضع: StarterPlayerScripts أو StarterGui (LocalScript)
+-- EG Tracker — نسخة مصححة ومرتّبة بالعربي
+-- احفظ كـ LocalScript داخل StarterPlayerScripts أو StarterGui
 -- العنوان: صنع حكومة | كلان EG - تتبع 4 لاعبين
--- خلفية سوداء، 4 خانات، تتبع حقيقي، تحديث سـرع
--- ======================================================
+-- خلفية: سوداء، 4 كروت، صورة مربعة، بحث من أول حرفين، تتبع حقيقي
 
 -- Services
 local Players = game:GetService("Players")
@@ -11,15 +9,24 @@ local ContentProvider = game:GetService("ContentProvider")
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 
--- Helper functions
-local function New(cls, props)
-    local inst = Instance.new(cls)
+-- تنظيف واجهة سابقة
+pcall(function()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if pg then
+        local old = pg:FindFirstChild("EG_Tracker_GUI")
+        if old then old:Destroy() end
+    end
+end)
+
+-- دوال مساعدة
+local function New(class, props)
+    local obj = Instance.new(class)
     if props then
         for k,v in pairs(props) do
-            pcall(function() inst[k] = v end)
+            pcall(function() obj[k] = v end)
         end
     end
-    return inst
+    return obj
 end
 
 local function UICorner(parent, radius)
@@ -65,7 +72,7 @@ end
 
 -- Avatar cache
 local AvatarCache = {}
-local function GetAvatarThumb(userId)
+local function SafeGetThumbnail(userId)
     if not userId or userId <= 0 then return "rbxassetid://0" end
     if AvatarCache[userId] then return AvatarCache[userId] end
     local ok, thumb = pcall(function()
@@ -79,103 +86,65 @@ local function GetAvatarThumb(userId)
     return "rbxassetid://0"
 end
 
--- remove old GUI if present
-pcall(function()
-    local pg = LocalPlayer:WaitForChild("PlayerGui")
-    local old = pg:FindFirstChild("EG_Tracker_GUI")
-    if old then old:Destroy() end
-end)
-
--- Colors
+-- ألوان
 local COLORS = {
-    BG = Color3.fromRGB(12,12,12),
-    PANEL = Color3.fromRGB(24,24,24),
+    BG = Color3.fromRGB(10,10,10),
+    PANEL = Color3.fromRGB(26,26,28),
     HEADER = Color3.fromRGB(18,18,18),
     ACCENT = Color3.fromRGB(0,150,255),
-    TEXT = Color3.fromRGB(235,235,235),
-    MUTED = Color3.fromRGB(160,160,165),
+    TEXT = Color3.fromRGB(230,230,235),
+    MUTED = Color3.fromRGB(150,155,165),
     GOOD = Color3.fromRGB(60,200,90),
     BAD = Color3.fromRGB(220,70,70),
-    STROKE = Color3.fromRGB(40,40,48)
+    STROKE = Color3.fromRGB(45,45,52),
 }
 
--- Build GUI
-local playerGui = LocalPlayer:WaitForChild("PlayerGui")
-local ScreenGui = New("ScreenGui", {Name = "EG_Tracker_GUI", ResetOnSpawn = false, Parent = playerGui})
+-- بناء الـ GUI
+local pg = LocalPlayer:WaitForChild("PlayerGui")
+local GUI = New("ScreenGui", {Name = "EG_Tracker_GUI", ResetOnSpawn = false, Parent = pg})
 
 local Root = New("Frame", {
-    Parent = ScreenGui,
+    Parent = GUI,
     Name = "Root",
-    Size = UDim2.new(0, 460, 0, 300), -- متوسط/صغير
-    Position = UDim2.new(0, 20, 0.4, -150),
+    Size = UDim2.new(0, 480, 0, 320), -- متوسط ومناسب
+    Position = UDim2.new(0, 24, 0.35, -160),
     BackgroundColor3 = COLORS.BG,
-    BorderSizePixel = 0
+    BorderSizePixel = 0,
 })
 UICorner(Root, 12); UIStroke(Root, 1, COLORS.STROKE, 0.18)
 
--- Header
-local Header = New("Frame", {
-    Parent = Root,
-    BackgroundColor3 = COLORS.HEADER,
-    Size = UDim2.new(1, -16, 0, 64),
-    Position = UDim2.new(0, 8, 0, 8),
-})
-UICorner(Header, 10); UIStroke(Header, 1, COLORS.STROKE, 0.14)
+-- Header (الهيدر ثابت)
+local Header = New("Frame", {Parent = Root, BackgroundColor3 = COLORS.HEADER, Size = UDim2.new(1, -16, 0, 70), Position = UDim2.new(0,8,0,8)})
+UICorner(Header, 10); UIStroke(Header, 1, COLORS.STROKE, 0.15)
 
 local Title = New("TextLabel", {
-    Parent = Header,
-    BackgroundTransparency = 1,
-    Font = Enum.Font.GothamBold,
-    TextSize = 18,
-    TextColor3 = COLORS.ACCENT,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Size = UDim2.new(1, -100, 0.6, 0),
-    Position = UDim2.new(0, 12, 0, 8),
-    Text = "صنع حكومة | كلان EG - تتبع 4 لاعبين"
+    Parent = Header, BackgroundTransparency = 1,
+    Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = COLORS.ACCENT,
+    Size = UDim2.new(0.8,0,0.6,0), Position = UDim2.new(0,10,0,6),
+    Text = "صنع حكومة | كلان EG - تتبع 4 لاعبين",
+    TextXAlignment = Enum.TextXAlignment.Left
+})
+local Rights = New("TextLabel", {
+    Parent = Header, BackgroundTransparency = 1,
+    Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.MUTED,
+    Size = UDim2.new(0.8,0,0.4,0), Position = UDim2.new(0,10,0,38),
+    Text = "حقوق: حكومه", TextXAlignment = Enum.TextXAlignment.Left
 })
 
-local Sub = New("TextLabel", {
-    Parent = Header,
-    BackgroundTransparency = 1,
-    Font = Enum.Font.Gotham,
-    TextSize = 12,
-    TextColor3 = COLORS.MUTED,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Size = UDim2.new(1, -100, 0.4, 0),
-    Position = UDim2.new(0, 12, 0, 36),
-    Text = "حقوق: حكومه"
-})
-
--- toggle button (small)
 local ToggleBtn = New("TextButton", {
-    Parent = Header,
-    Size = UDim2.new(0, 84, 0, 36),
-    Position = UDim2.new(1, -94, 0, 14),
-    BackgroundColor3 = COLORS.PANEL,
-    AutoButtonColor = true,
-    Font = Enum.Font.Gotham,
-    TextSize = 14,
-    TextColor3 = COLORS.TEXT,
-    Text = "إخفاء",
+    Parent = Header, Size = UDim2.new(0,86,0,36), Position = UDim2.new(1,-98,0,18),
+    BackgroundColor3 = COLORS.PANEL, Font = Enum.Font.Gotham, TextSize = 14, TextColor3 = COLORS.TEXT, Text = "إخفاء"
 })
 UICorner(ToggleBtn, 8); UIStroke(ToggleBtn, 1, COLORS.STROKE, 0.12)
 ToggleBtn.Active = true; ToggleBtn.Selectable = true; ToggleBtn.Draggable = true
 
--- separator
-local Sep = New("Frame", {
-    Parent = Root,
-    BackgroundColor3 = COLORS.ACCENT,
-    Size = UDim2.new(1, -16, 0, 2),
-    Position = UDim2.new(0, 8, 0, 82)
-})
+-- separator الخط الازرق
+local Sep = New("Frame", {Parent = Root, BackgroundColor3 = COLORS.ACCENT, Size = UDim2.new(1, -16, 0, 2), Position = UDim2.new(0,8,0,86)})
 
--- Grid area
-local Grid = New("Frame", {
-    Parent = Root,
-    BackgroundTransparency = 1,
-    Size = UDim2.new(1, -16, 1, -104),
-    Position = UDim2.new(0, 8, 0, 92)
-})
+-- ContentFrame (المحتوى القابل للإخفاء) — Toggle يخفي هذا الإطار فقط
+local ContentFrame = New("Frame", {Parent = Root, BackgroundTransparency = 1, Size = UDim2.new(1, -16, 1, -108), Position = UDim2.new(0,8,0,96)})
+-- grid داخل ContentFrame
+local Grid = New("Frame", {Parent = ContentFrame, BackgroundTransparency = 1, Size = UDim2.new(1,0,1,0), Position = UDim2.new(0,0,0,0)})
 local GridLayout = New("UIGridLayout")
 GridLayout.Parent = Grid
 GridLayout.CellPadding = UDim2.new(0,10,0,10)
@@ -190,32 +159,32 @@ Card.__index = Card
 function Card.new()
     local self = setmetatable({}, Card)
     local frame = New("Frame", {Parent = Grid, BackgroundColor3 = COLORS.PANEL, BorderSizePixel = 0})
-    UICorner(frame, 8); UIStroke(frame, 1, COLORS.STROKE, 0.12)
+    UICorner(frame, 8); UIStroke(frame, 1, COLORS.STROKE, 0.10)
     self.Frame = frame
 
-    -- Search input (empty placeholder)
-    local box = New("TextBox", {Parent = frame, BackgroundColor3 = COLORS.BG, ClearTextOnFocus = false, PlaceholderText = "", Text = "", Font = Enum.Font.Gotham, TextSize = 14, TextColor3 = COLORS.TEXT, Size = UDim2.new(1, -12, 0, 28), Position = UDim2.new(0, 6, 0, 6)})
-    UICorner(box, 6); UIStroke(box, 1, COLORS.STROKE, 0.10)
-    self.Search = box
+    -- Search box (فارغ)
+    local search = New("TextBox", {Parent = frame, BackgroundColor3 = COLORS.BG, ClearTextOnFocus = false, PlaceholderText = "", Text = "", Font = Enum.Font.Gotham, TextSize = 14, TextColor3 = COLORS.TEXT, Size = UDim2.new(1, -12, 0, 30), Position = UDim2.new(0,6,0,6)})
+    UICorner(search, 6); UIStroke(search, 1, COLORS.STROKE, 0.08)
+    self.Search = search
 
-    -- content
-    local content = New("Frame", {Parent = frame, BackgroundTransparency = 1, Size = UDim2.new(1, -12, 1, -84), Position = UDim2.new(0, 6, 0, 42)})
-    -- avatar square small
-    local avatar = New("ImageLabel", {Parent = content, BackgroundColor3 = COLORS.HEADER, Size = UDim2.new(0, 64, 0, 64), Position = UDim2.new(0, 0, 0, 0), ScaleType = Enum.ScaleType.Crop, Image = "rbxassetid://0"})
-    UICorner(avatar, 6); UIStroke(avatar, 1, COLORS.STROKE, 0.12)
+    -- content area
+    local content = New("Frame", {Parent = frame, BackgroundTransparency = 1, Size = UDim2.new(1, -12, 1, -92), Position = UDim2.new(0,6,0,44)})
+    -- avatar مربع صغير
+    local avatar = New("ImageLabel", {Parent = content, BackgroundColor3 = COLORS.HEADER, Size = UDim2.new(0,64,0,64), Position = UDim2.new(0,0,0,0), ScaleType = Enum.ScaleType.Crop, Image = "rbxassetid://0"})
+    UICorner(avatar, 6); UIStroke(avatar, 1, COLORS.STROKE, 0.10)
     self.Avatar = avatar
 
-    -- meta (name, time start, duration)
-    local meta = New("Frame", {Parent = content, BackgroundTransparency = 1, Size = UDim2.new(1, -76, 1, 0), Position = UDim2.new(0, 76, 0, 0)})
+    -- meta info
+    local meta = New("Frame", {Parent = content, BackgroundTransparency = 1, Size = UDim2.new(1, -80, 1, 0), Position = UDim2.new(0,80,0,0)})
     self.NameLbl = New("TextLabel", {Parent = meta, BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = COLORS.TEXT, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1,0,0,22), Position = UDim2.new(0,0,0,0), Text = "-"})
-    self.StartLbl = New("TextLabel", {Parent = meta, BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.MUTED, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,0,26), Text = "الوقت: -"})
-    self.DurationLbl = New("TextLabel", {Parent = meta, BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.MUTED, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,0,44), Text = "المدة: 0 ساعة 0 دقيقة"})
+    self.TimeLbl = New("TextLabel", {Parent = meta, BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.MUTED, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,0,28), Text = "الوقت: -"})
+    self.DurLbl = New("TextLabel", {Parent = meta, BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.MUTED, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1,0,0,18), Position = UDim2.new(0,0,0,46), Text = "المدة: 0 ساعة 0 دقيقة"})
 
-    -- bottom small status
+    -- bottom (دخول/خروج)
     local bottom = New("Frame", {Parent = frame, BackgroundColor3 = COLORS.BG, Size = UDim2.new(1, -12, 0, 36), Position = UDim2.new(0, 6, 1, -42)})
-    UICorner(bottom, 6); UIStroke(bottom, 1, COLORS.STROKE, 0.10)
+    UICorner(bottom, 6); UIStroke(bottom, 1, COLORS.STROKE, 0.08)
     self.StateLbl = New("TextLabel", {Parent = bottom, BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = COLORS.MUTED, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(0.6,0,1,0), Position = UDim2.new(0,8,0,0), Text = "-"})
-    self.JoinLbl  = New("TextLabel", {Parent = bottom, BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.GOOD, TextXAlignment = Enum.TextXAlignment.Right, Size = UDim2.new(0.2,-6,1,0), Position = UDim2.new(0.6,0,0,0), Text = "دخول: 0"})
+    self.JoinLbl = New("TextLabel", {Parent = bottom, BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.GOOD, TextXAlignment = Enum.TextXAlignment.Right, Size = UDim2.new(0.2,-6,1,0), Position = UDim2.new(0.6,0,0,0), Text = "دخول: 0"})
     self.LeaveLbl = New("TextLabel", {Parent = bottom, BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.BAD, TextXAlignment = Enum.TextXAlignment.Right, Size = UDim2.new(0.2,-6,1,0), Position = UDim2.new(0.8,0,0,0), Text = "خروج: 0"})
 
     -- internal
@@ -230,53 +199,46 @@ end
 function Card:bind(player)
     self:unbind()
     if not player then return end
-
     self.Player = player
     self.NameLbl.Text = player.DisplayName or player.Name or "-"
+    -- تحميل الصورة بأمان
     spawn(function()
-        local img = GetAvatarThumb(player.UserId)
-        if img and typeof(img) == "string" then
+        local img = SafeGetThumbnail(player.UserId)
+        if img then
             pcall(function() self.Avatar.Image = img end)
         end
     end)
+    -- البداية والعدادات
+    local st = os.time()
+    self._startTime = st
+    self.TimeLbl.Text = "الوقت: " .. formatClock(st)
+    self.JoinLbl.Text = "دخول: 0"; self.LeaveLbl.Text = "خروج: 0"
+    self.StateLbl.Text = "الحالة: -"; self.StateLbl.TextColor3 = COLORS.MUTED
 
-    -- set time and counters
-    local t0 = os.time()
-    self._startTime = t0
-    self.StartLbl.Text = "الوقت: " .. formatClock(t0)
-    self.JoinLbl.Text = "دخول: 0"
-    self.LeaveLbl.Text = "خروج: 0"
-    self.StateLbl.Text = "الحالة: غير معروف"
-    self.StateLbl.TextColor3 = COLORS.MUTED
-
-    -- handlers
-    local function onCharAdded(char)
+    local function onAdded(char)
         local cur = tonumber(self.JoinLbl.Text:match("%d+")) or 0
         self.JoinLbl.Text = "دخول: " .. (cur + 1)
-        self.StateLbl.Text = "الحالة: داخل"
-        self.StateLbl.TextColor3 = COLORS.GOOD
+        self.StateLbl.Text = "الحالة: داخل"; self.StateLbl.TextColor3 = COLORS.GOOD
     end
-    local function onCharRemoving()
+    local function onRemoving()
         local cur = tonumber(self.LeaveLbl.Text:match("%d+")) or 0
         self.LeaveLbl.Text = "خروج: " .. (cur + 1)
-        self.StateLbl.Text = "الحالة: خارج"
-        self.StateLbl.TextColor3 = COLORS.BAD
+        self.StateLbl.Text = "الحالة: خارج"; self.StateLbl.TextColor3 = COLORS.BAD
     end
 
-    if player.Character then onCharAdded(player.Character) end
-    table.insert(self._conns, player.CharacterAdded:Connect(onCharAdded))
-    if player.CharacterRemoving then
-        table.insert(self._conns, player.CharacterRemoving:Connect(onCharRemoving))
-    end
+    -- وصل الأحداث بحذر وفك الربط لاحقًا
+    if player.Character then onAdded(player.Character) end
+    table.insert(self._conns, player.CharacterAdded:Connect(onAdded))
+    if player.CharacterRemoving then table.insert(self._conns, player.CharacterRemoving:Connect(onRemoving)) end
 
-    -- updater for duration (every second)
+    -- مؤقت لتحديث المدة
     local token = HttpService:GenerateGUID(false)
     self._timerToken = token
     spawn(function()
         while self._timerToken == token do
             if self._startTime then
                 local elapsed = os.time() - self._startTime
-                self.DurationLbl.Text = "المدة: " .. formatHM(elapsed)
+                self.DurLbl.Text = "المدة: " .. formatHM(elapsed)
             end
             wait(1)
         end
@@ -286,18 +248,18 @@ end
 function Card:unbind()
     self._startTime = nil
     self._timerToken = nil
-    for _, c in ipairs(self._conns) do
+    for _,c in ipairs(self._conns) do
         if c and c.Disconnect then
             pcall(function() c:Disconnect() end)
         end
     end
     self._conns = {}
     self.Player = nil
-    -- reset display
+    -- reset UI
     pcall(function()
         self.NameLbl.Text = "-"
-        self.StartLbl.Text = "الوقت: -"
-        self.DurationLbl.Text = "المدة: 0 ساعة 0 دقيقة"
+        self.TimeLbl.Text = "الوقت: -"
+        self.DurLbl.Text = "المدة: 0 ساعة 0 دقيقة"
         self.Avatar.Image = "rbxassetid://0"
         self.StateLbl.Text = "-"
         self.JoinLbl.Text = "دخول: 0"
@@ -310,40 +272,47 @@ function Card:destroy()
     pcall(function() if self.Frame then self.Frame:Destroy() end end)
 end
 
--- create 4 cards
+-- أنشئ 4 كروت
 local Cards = {}
-for i = 1, 4 do
-    Cards[i] = Card.new()
-end
+for i = 1, 4 do Cards[i] = Card.new() end
 
--- smart search (from first 2 letters)
-for _, c in ipairs(Cards) do
+-- البحث: يلتقط من أول حرفين ويستجيب بسرعة
+for _,c in ipairs(Cards) do
+    local debounce = false
     local last = ""
     c.Search:GetPropertyChangedSignal("Text"):Connect(function()
         local txt = trim(c.Search.Text or "")
         if txt == last then return end
         last = txt
-        if #txt >= 2 then
-            local q = txt:lower()
-            local found = nil
-            for _, p in ipairs(Players:GetPlayers()) do
-                local un = (p.Name or ""):lower()
-                local dn = (p.DisplayName or ""):lower()
-                if un:sub(1,#q) == q or dn:sub(1,#q) == q then
-                    found = p
-                    break
+        if debounce then return end
+        debounce = true
+        spawn(function()
+            wait(0.06) -- وقت قصير لتجنب تحريك سريع جداً
+            if #txt >= 2 then
+                local q = txt:lower()
+                local found = nil
+                for _,p in ipairs(Players:GetPlayers()) do
+                    local un = (p.Name or ""):lower()
+                    local dn = (p.DisplayName or ""):lower()
+                    if un:sub(1,#q) == q or dn:sub(1,#q) == q then found = p; break end
                 end
+                if found then c:bind(found) else c:unbind() end
+            else
+                c:unbind()
             end
-            if found then c:bind(found) end
-        else
-            c:unbind()
-        end
+            debounce = false
+        end)
+    end)
+    -- للتوافق في حالة ترك الحقل
+    c.Search.FocusLost:Connect(function(enter)
+        local txt = trim(c.Search.Text or "")
+        if #txt < 2 then c:unbind() end
     end)
 end
 
--- handle player leaving: update bound card if needed
+-- عند خروج لاعب: حدث عام يحدث في الكارت المرتبط إن وجد
 Players.PlayerRemoving:Connect(function(plr)
-    for _, c in ipairs(Cards) do
+    for _,c in ipairs(Cards) do
         if c.Player and c.Player == plr then
             local cur = tonumber(c.LeaveLbl.Text:match("%d+")) or 0
             c.LeaveLbl.Text = "خروج: " .. (cur + 1)
@@ -354,28 +323,26 @@ Players.PlayerRemoving:Connect(function(plr)
     end
 end)
 
--- toggle button
+-- Toggle: يخفي محتوى الكروت فقط (ContentFrame) وليس الهيدر
 ToggleBtn.MouseButton1Click:Connect(function()
-    Root.Visible = not Root.Visible
-    ToggleBtn.Text = Root.Visible and "إخفاء" or "إظهار"
+    ContentFrame.Visible = not ContentFrame.Visible
+    ToggleBtn.Text = ContentFrame.Visible and "إخفاء" or "إظهار"
 end)
 
--- drag Root
+-- سحب اللوحة: الهيدر فقط (أمان لعدم تحريك عناصر اللعبة)
 do
     local dragging = false
     local dragStart = Vector2.new(0,0)
     local startPos = Root.Position
-    Root.InputBegan:Connect(function(input)
+    Header.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
             dragStart = input.Position
             startPos = Root.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
         end
     end)
-    Root.InputChanged:Connect(function(input)
+    Header.InputChanged:Connect(function(input)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local delta = input.Position - dragStart
             Root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
@@ -383,7 +350,7 @@ do
     end)
 end
 
--- save/load position (Attributes)
+-- حفظ/تحميل موضع
 local posKey = "EG_TRACKER_POS"
 local function savePos()
     pcall(function()
@@ -405,10 +372,10 @@ end
 Root:GetPropertyChangedSignal("Position"):Connect(savePos)
 loadPos()
 
--- initial hint
+-- تلميح سريع عند التشغيل
 do
-    local hint = New("TextLabel", {Parent = Root, BackgroundTransparency = 1, Size = UDim2.new(0.9,0,0,24), Position = UDim2.new(0.05,0,1,-36), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.MUTED, Text = "اكتب أول حرفين أو أكثر داخل أي خانة لربط لاعب وبدء التتبع"})
+    local hint = New("TextLabel", {Parent = Root, BackgroundTransparency = 1, Size = UDim2.new(0.9,0,0,22), Position = UDim2.new(0.05,0,1,-36), Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = COLORS.MUTED, Text = "اكتب أول حرفين أو أكثر داخل أي خانة لربط لاعب وبدء التتبع"})
     delay(4, function() pcall(function() hint:Destroy() end) end)
 end
 
--- done
+-- انتهى — نسخة مصححة. لو في أي حاجة: صورة شاشة مع المناطق اللي بتتداخل أو نص خطأ، هعدّل فورًا.
