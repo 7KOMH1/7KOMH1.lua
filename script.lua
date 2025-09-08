@@ -1,482 +1,337 @@
--- LocalScript (ضعه داخل StarterGui)
--- صنع حكومه | كلان EG - تتبع 4 لاعبين (النسخة النهائية الشاملة)
+-- صنع حكومه | كلان EG
+-- Player Tracker GUI (4 Slots, Prefix Search, True Join/Leave, Toggle, Draggable, Compact 600x320)
 
--- خدمات
-local Players      = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local RunService   = game:GetService("RunService")
-local UserInput    = game:GetService("UserInputService")
+-- ⬇️ محليّات وخدمات
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
 
-local LocalPlayer  = Players.LocalPlayer
-local PlayerGui    = LocalPlayer:WaitForChild("PlayerGui")
+-- ⬇️ إعدادات
+local UI_WIDTH, UI_HEIGHT = 600, 320
+local SLOT_W, SLOT_H = 285, 120
+local MIN_PREFIX = 2 -- اقل عدد حروف للالتقاط (غيّرها لـ 1 لو عايز يلقط من أول حرف)
 
--- دوال مساعدة
-local function fmtElapsed(sec)
-	sec = math.max(0, math.floor(sec or 0))
-	local h = math.floor(sec/3600)
-	local m = math.floor((sec%3600)/60)
-	local s = sec%60
-	return string.format("%02d:%02d:%02d", h, m, s)
-end
-local function fmtTimeNow()
-	return os.date("%Y-%m-%d %H:%M:%S", os.time())
-end
-
--- ========== بناء الـ GUI ==========
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "EG_Tracker_Final"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = PlayerGui
-
--- زر الفتح (قابل للسحب)
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Name = "ToggleButton"
-toggleBtn.Text = "فتح قائمة التتبع"
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 14
-toggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(10, 28, 60)
-toggleBtn.BorderSizePixel = 0
-toggleBtn.Size = UDim2.new(0, 160, 0, 32)
-toggleBtn.Position = UDim2.new(0, 12, 0.5, -16)
-toggleBtn.AnchorPoint = Vector2.new(0, 0.5)
-toggleBtn.ZIndex = 50
-toggleBtn.Parent = screenGui
-toggleBtn.AutoButtonColor = true
-toggleBtn.Active = true
-
--- لمسة حركة بسيطة دورية للزر (خفيفه)
-do
-	task.spawn(function()
-		local up = true
-		while toggleBtn.Parent do
-			local delta = (up and 6) or -6
-			TweenService:Create(toggleBtn, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Position = toggleBtn.Position + UDim2.new(0,0,0,delta)}):Play()
-			up = not up
-			task.wait(0.8)
-		end
-	end)
+-- ⬇️ أداة سحب لأي عنصر GUI (بديل قوي عن Draggable)
+local function makeDraggable(guiObject)
+    local dragging, dragStart, startPos
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    guiObject.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                local delta = input.Position - dragStart
+                guiObject.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end
+        end
+    end)
 end
 
--- اللوحة الرئيسية (بانل أسود أنيق)
-local panel = Instance.new("Frame")
-panel.Name = "MainPanel"
-panel.Size = UDim2.new(0, 640, 0, 460)
-panel.Position = UDim2.new(0, -700, 0.5, -230) -- مخفي في اليسار افتراضياً
-panel.AnchorPoint = Vector2.new(0, 0.5)
-panel.BackgroundColor3 = Color3.fromRGB(6,6,6)
-panel.BorderSizePixel = 0
-panel.Parent = screenGui
-panel.Active = true
+-- ⬇️ GUI: زرار التبديل (إظهار/إخفاء)
+local ToggleGui = Instance.new("ScreenGui")
+ToggleGui.Name = "ToggleTracker"
+ToggleGui.ResetOnSpawn = false
+ToggleGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- ظل ناعم (اختياري)
-local shadow = Instance.new("UIStroke")
-shadow.Parent = panel
-shadow.Transparency = 0.9
-shadow.Thickness = 1
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Text = "إظهار التتبع"
+ToggleButton.Size = UDim2.new(0, 120, 0, 36)
+ToggleButton.Position = UDim2.new(0, 20, 0.5, -18)
+ToggleButton.AutoButtonColor = true
+ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+ToggleButton.BorderSizePixel = 0
+ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+ToggleButton.Font = Enum.Font.SourceSansBold
+ToggleButton.TextSize = 18
+ToggleButton.Parent = ToggleGui
+makeDraggable(ToggleButton)
 
--- حقوق باللون الأزرق
-local title = Instance.new("TextLabel")
-title.Parent = panel
-title.Size = UDim2.new(1, -24, 0, 36)
-title.Position = UDim2.new(0, 12, 0, 10)
-title.BackgroundTransparency = 1
-title.Text = "صنع حكومه | كلان EG - تتبع 4 لاعبين"
-title.TextColor3 = Color3.fromRGB(0, 170, 255)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 16
-title.TextXAlignment = Enum.TextXAlignment.Left
+-- ⬇️ GUI: الواجهة الرئيسية الصغيرة
+local TrackerGui = Instance.new("ScreenGui")
+TrackerGui.Name = "ClanEG_Tracker"
+TrackerGui.ResetOnSpawn = false
+TrackerGui.Enabled = false
+TrackerGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- حاوية شبكة 2x2
-local grid = Instance.new("Frame")
-grid.Parent = panel
-grid.Size = UDim2.new(1, -24, 1, -74)
-grid.Position = UDim2.new(0, 12, 0, 54)
-grid.BackgroundTransparency = 1
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, UI_WIDTH, 0, UI_HEIGHT)
+MainFrame.Position = UDim2.new(0.5, -UI_WIDTH/2, 0.18, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = TrackerGui
+makeDraggable(MainFrame)
 
-local cellPositions = {
-	UDim2.new(0, 0,   0, 0),
-	UDim2.new(0.5, 8, 0, 0),
-	UDim2.new(0, 0,   0.5, 8),
-	UDim2.new(0.5, 8, 0.5, 8),
+-- ترويسة
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Text = "صنع حكومه | كلان EG - تتبع 4 لاعبين"
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.TextColor3 = Color3.fromRGB(200, 240, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 20
+Title.Parent = MainFrame
+
+-- فاصل سفلي بسيط
+local Bar = Instance.new("Frame")
+Bar.Size = UDim2.new(1, 0, 0, 2)
+Bar.Position = UDim2.new(0, 0, 0, 40)
+Bar.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+Bar.BorderSizePixel = 0
+Bar.Parent = MainFrame
+
+-- ⬇️ نموذج خانة لاعب
+export type SlotState = {
+    Frame: Frame,
+    Input: TextBox,
+    Avatar: ImageLabel,
+    NameLabel: TextLabel,
+    TimeLabel: TextLabel,
+    JLLabel: TextLabel,
+    Target: Player?,
+    Seconds: number,
+    Conns: { RBXScriptConnection },
+    JoinCount: number,
+    LeaveCount: number
 }
 
--- جدول الخانات
-local Slots = {} -- كل عنصر: Frame, Input, Img, Display, User, Time, Events labels, Assigned, SessionStart, Joins, Leaves
+local ThumbnailType = Enum.ThumbnailType.HeadShot
+local ThumbnailSize = Enum.ThumbnailSize.Size100x100
 
--- منع تكرار نفس اللاعب
-local function isAssigned(plr)
-	for i=1,4 do
-		local s = Slots[i]
-		if s and s.Assigned and s.Assigned.UserId == plr.UserId then
-			return true
-		end
-	end
-	return false
+local function createSlot(xOffset: number, yOffset: number): SlotState
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, SLOT_W, 0, SLOT_H)
+    frame.Position = UDim2.new(0, xOffset, 0, yOffset)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.Parent = MainFrame
+    makeDraggable(frame)
+
+    -- مربع كتابة الاسم (بدون Placeholder)
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(0, 160, 0, 28)
+    input.Position = UDim2.new(0, 8, 0, 8)
+    input.BackgroundColor3 = Color3.fromRGB(65, 65, 65)
+    input.TextColor3 = Color3.new(1, 1, 1)
+    input.Font = Enum.Font.SourceSans
+    input.TextSize = 16
+    input.ClearTextOnFocus = false
+    input.Text = ""
+    input.Parent = frame
+
+    -- صورة أفاتار
+    local avatar = Instance.new("ImageLabel")
+    avatar.Size = UDim2.new(0, 60, 0, 60)
+    avatar.Position = UDim2.new(0, SLOT_W - 68, 0, 8)
+    avatar.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    avatar.BorderSizePixel = 0
+    avatar.ScaleType = Enum.ScaleType.Fit
+    avatar.Parent = frame
+
+    -- الاسم/اللقب
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(0, SLOT_W - 80, 0, 24)
+    nameLabel.Position = UDim2.new(0, 8, 0, 44)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 16
+    nameLabel.Text = ""
+    nameLabel.Parent = frame
+
+    -- الوقت
+    local timeLabel = Instance.new("TextLabel")
+    timeLabel.Size = UDim2.new(0, SLOT_W - 16, 0, 22)
+    timeLabel.Position = UDim2.new(0, 8, 0, 74)
+    timeLabel.BackgroundTransparency = 1
+    timeLabel.TextColor3 = Color3.fromRGB(150, 200, 255)
+    timeLabel.Font = Enum.Font.SourceSans
+    timeLabel.TextSize = 15
+    timeLabel.Text = "الوقت: 00:00:00"
+    timeLabel.Parent = frame
+
+    -- الدخول/الخروج
+    local jlLabel = Instance.new("TextLabel")
+    jlLabel.Size = UDim2.new(0, SLOT_W - 16, 0, 22)
+    jlLabel.Position = UDim2.new(0, 8, 0, 96)
+    jlLabel.BackgroundTransparency = 1
+    jlLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
+    jlLabel.Font = Enum.Font.SourceSans
+    jlLabel.TextSize = 15
+    jlLabel.Text = "الدخول: 0 | الخروج: 0"
+    jlLabel.Parent = frame
+
+    return {
+        Frame = frame,
+        Input = input,
+        Avatar = avatar,
+        NameLabel = nameLabel,
+        TimeLabel = timeLabel,
+        JLLabel = jlLabel,
+        Target = nil,
+        Seconds = 0,
+        Conns = {},
+        JoinCount = 0,
+        LeaveCount = 0
+    }
 end
 
--- البحث في اللاعبين الحاليين (أولوية لبدايات الاسم/اللقب)
-local function findPlayerByQuery(q)
-	if not q or #q < 2 then return nil end
-	q = string.lower(q)
-	for _,plr in ipairs(Players:GetPlayers()) do
-		if plr ~= LocalPlayer then
-			local dn = string.lower(plr.DisplayName or "")
-			local un = string.lower(plr.Name or "")
-			if dn:sub(1, #q) == q or un:sub(1, #q) == q or dn:find(q,1,true) or un:find(q,1,true) then
-				return plr
-			end
-		end
-	end
-	return nil
+-- ⬇️ أربع خانات في شبكة 2×2
+local slots: {SlotState} = {}
+slots[1] = createSlot(10,  56)
+slots[2] = createSlot(305, 56)
+slots[3] = createSlot(10,  186)
+slots[4] = createSlot(305, 186)
+
+-- ⬇️ مساعدات
+local function setAvatarForUserId(img: ImageLabel, userId: number)
+    local ok, url = pcall(function()
+        return Players:GetUserThumbnailAsync(userId, ThumbnailType, ThumbnailSize)
+    end)
+    if ok and typeof(url) == "string" and #url > 0 then
+        img.Image = url
+    else
+        img.Image = ""
+    end
 end
 
--- تعيين لاعب لخانة
-local function assignToSlot(idx, plr)
-	if not plr then return end
-	local S = Slots[idx]
-	if not S then return end
-	-- منع التعيين لو اللاعب في خانة تانية
-	if isAssigned(plr) and (not S.Assigned or S.Assigned.UserId ~= plr.UserId) then
-		-- لو تحب نعرض رسالة صغيرة هنا نقدر
-		return
-	end
-
-	-- لو نفس اللاعب معطى خلاص نحدّث بس
-	if S.Assigned and S.Assigned.UserId == plr.UserId then
-		return
-	end
-
-	S.Assigned = plr
-	S.SessionStart = os.clock()
-	S.Joins = (S.Joins or 0) + 1
-	S.LastEvent = "دخول"
-	S.JoinLabel.Text = "الدخول: " .. tostring(S.Joins)
-	S.LastEventLabel.Text = "آخر حدث: " .. tostring(S.LastEvent .. " @ " .. fmtTimeNow())
-
-	-- اسم ولقب
-	S.Display.Text = (plr.DisplayName or "—")
-	S.User.Text = "@" .. (plr.Name or "—")
-
-	-- صورة (آمنة بواسطة pcall)
-	local ok, thumb = pcall(function()
-		return Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-	end)
-	if ok and thumb and thumb ~= "" then
-		S.Img.Image = thumb
-	else
-		S.Img.Image = ""
-	end
-
-	-- إظهار الكارد لو كان مخفي
-	S.Frame.Visible = true
-
-	-- أنيميشن بسيط للتعيين
-	pcall(function()
-		local t1 = TweenService:Create(S.Frame, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(12,12,12)})
-		t1:Play()
-		task.delay(0.18, function()
-			if S and S.Frame then
-				TweenService:Create(S.Frame, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(6,6,6)}):Play()
-			end
-		end)
-	end)
+local function resetSlot(slot: SlotState)
+    slot.Target = nil
+    slot.Seconds = 0
+    for _, c in ipairs(slot.Conns) do
+        if c and c.Connected then c:Disconnect() end
+    end
+    slot.Conns = {}
+    slot.Avatar.Image = ""
+    slot.NameLabel.Text = ""
+    slot.TimeLabel.Text = "الوقت: 00:00:00"
+    slot.JoinCount, slot.LeaveCount = 0, 0
+    slot.JLLabel.Text = "الدخول: 0 | الخروج: 0"
 end
 
--- تفريغ خانة (clear)
-local function clearSlot(idx)
-	local S = Slots[idx]
-	if not S then return end
-	S.Assigned = nil
-	S.SessionStart = 0
-	S.Display.Text = "—"
-	S.User.Text = "@—"
-	S.TimeLabel.Text = "الوقت: 00:00:00"
-	S.JoinLabel.Text = "الدخول: 0"
-	S.LeaveLabel.Text = "الخروج: 0"
-	S.LastEventLabel.Text = "آخر حدث: —"
-	S.Img.Image = ""
-	S.Joins = 0
-	S.Leaves = 0
-	S.LastEvent = "—"
-	-- نقدر نخفي الكارد لو تحب، حاليا نحتفظ ظاهر
+local function setJL(slot: SlotState)
+    slot.JLLabel.Text = string.format("الدخول: %d | الخروج: %d", slot.JoinCount, slot.LeaveCount)
 end
 
--- إنشاء خانة واحدة
-local function createSlot(i)
-	local card = Instance.new("Frame")
-	card.Name = "Slot"..i
-	card.Parent = grid
-	card.Size = UDim2.new(0.5, -8, 0.5, -8)
-	card.Position = cellPositions[i]
-	card.BackgroundColor3 = Color3.fromRGB(6,6,6)
-	card.BorderSizePixel = 0
-	card.ClipsDescendants = true
+local function bindPlayer(slot: SlotState, plr: Player)
+    -- لو نفس اللاعب، سيب كل حاجة زي ما هي
+    if slot.Target and slot.Target == plr then return end
 
-	-- مربع البحث الخاص بالخانة
-	local input = Instance.new("TextBox")
-	input.Parent = card
-	input.Size = UDim2.new(1, -12, 0, 32)
-	input.Position = UDim2.new(0, 6, 0, 6)
-	input.PlaceholderText = "اكتب حرفين أو أكتر لالتقاط لاعب..."
-	input.Text = ""
-	input.Font = Enum.Font.Gotham
-	input.TextSize = 14
-	input.TextColor3 = Color3.fromRGB(240,240,240)
-	input.BackgroundColor3 = Color3.fromRGB(18,18,18)
-	input.ClearTextOnFocus = false
+    -- فصل أي اتصالات قديمة
+    for _, c in ipairs(slot.Conns) do
+        if c and c.Connected then c:Disconnect() end
+    end
+    slot.Conns = {}
 
-	-- صورة اللاعب
-	local img = Instance.new("ImageLabel")
-	img.Parent = card
-	img.Size = UDim2.new(0, 84, 0, 84)
-	img.Position = UDim2.new(0, 8, 0, 48)
-	img.BackgroundTransparency = 1
-	img.Image = ""
+    -- تهيئة
+    slot.Target = plr
+    slot.Seconds = 0
+    slot.JoinCount, slot.LeaveCount = 0, 0
 
-	-- DisplayName
-	local display = Instance.new("TextLabel")
-	display.Parent = card
-	display.Size = UDim2.new(1, -108, 0, 28)
-	display.Position = UDim2.new(0, 108, 0, 48)
-	display.BackgroundTransparency = 1
-	display.Text = "—"
-	display.TextColor3 = Color3.fromRGB(230,230,230)
-	display.Font = Enum.Font.GothamBold
-	display.TextSize = 16
-	display.TextXAlignment = Enum.TextXAlignment.Left
+    -- لو اللاعب موجود بالفعل في السيرفر عند الربط نحسب دخول واحد
+    if plr.Parent == Players then
+        slot.JoinCount = 1
+    end
+    setJL(slot)
 
-	-- Username
-	local userlab = Instance.new("TextLabel")
-	userlab.Parent = card
-	userlab.Size = UDim2.new(1, -108, 0, 22)
-	userlab.Position = UDim2.new(0, 108, 0, 78)
-	userlab.BackgroundTransparency = 1
-	userlab.Text = "@—"
-	userlab.TextColor3 = Color3.fromRGB(150,150,150)
-	userlab.Font = Enum.Font.Gotham
-	userlab.TextSize = 14
-	userlab.TextXAlignment = Enum.TextXAlignment.Left
+    -- صورة + اسم/لقب
+    setAvatarForUserId(slot.Avatar, plr.UserId)
+    slot.NameLabel.Text = string.format("%s (@%s)", plr.DisplayName, plr.Name)
 
-	-- الوقت (عداد حي)
-	local timeLbl = Instance.new("TextLabel")
-	timeLbl.Parent = card
-	timeLbl.Size = UDim2.new(1, -12, 0, 22)
-	timeLbl.Position = UDim2.new(0, 6, 0, 140)
-	timeLbl.BackgroundTransparency = 1
-	timeLbl.Text = "الوقت: 00:00:00"
-	timeLbl.TextColor3 = Color3.fromRGB(120, 220, 150)
-	timeLbl.Font = Enum.Font.Gotham
-	timeLbl.TextSize = 13
-	timeLbl.TextXAlignment = Enum.TextXAlignment.Left
+    -- تايمر: يعد بس واللاعب موجود
+    task.spawn(function()
+        while slot.Target == plr do
+            if plr.Parent == Players then
+                slot.Seconds += 1
+                local h = math.floor(slot.Seconds/3600)
+                local m = math.floor((slot.Seconds%3600)/60)
+                local s = slot.Seconds%60
+                slot.TimeLabel.Text = string.format("الوقت: %02d:%02d:%02d", h, m, s)
+            end
+            task.wait(1)
+        end
+    end)
 
-	-- فاصل
-	local sep = Instance.new("Frame")
-	sep.Parent = card
-	sep.Size = UDim2.new(1, -12, 0, 1)
-	sep.Position = UDim2.new(0, 6, 0, 166)
-	sep.BackgroundColor3 = Color3.fromRGB(24,24,24)
-	sep.BorderSizePixel = 0
+    -- سماع الدخول/الخروج الحقيقيين لهذا اللاعب
+    table.insert(slot.Conns, Players.PlayerRemoving:Connect(function(rem)
+        if slot.Target == plr and rem == plr then
+            slot.LeaveCount += 1
+            setJL(slot)
+        end
+    end))
 
-	-- سطور الدخول/الخروج/آخر حدث (تحت بعض)
-	local joinLabel = Instance.new("TextLabel")
-	joinLabel.Parent = card
-	joinLabel.Size = UDim2.new(1, -12, 0, 18)
-	joinLabel.Position = UDim2.new(0, 6, 0, 172)
-	joinLabel.BackgroundTransparency = 1
-	joinLabel.Text = "الدخول: 0"
-	joinLabel.TextColor3 = Color3.fromRGB(150,180,255)
-	joinLabel.Font = Enum.Font.Gotham
-	joinLabel.TextSize = 13
-	joinLabel.TextXAlignment = Enum.TextXAlignment.Left
+    table.insert(slot.Conns, Players.PlayerAdded:Connect(function(add)
+        if slot.Target == plr and add.UserId == plr.UserId then
+            -- تحديث المرجع (plr الجديد) بعد إعادة الدخول
+            slot.Target = add
+            setAvatarForUserId(slot.Avatar, add.UserId)
+            slot.NameLabel.Text = string.format("%s (@%s)", add.DisplayName, add.Name)
+            slot.JoinCount += 1
+            setJL(slot)
+        end
+    end))
 
-	local leaveLabel = Instance.new("TextLabel")
-	leaveLabel.Parent = card
-	leaveLabel.Size = UDim2.new(1, -12, 0, 18)
-	leaveLabel.Position = UDim2.new(0, 6, 0, 190)
-	leaveLabel.BackgroundTransparency = 1
-	leaveLabel.Text = "الخروج: 0"
-	leaveLabel.TextColor3 = Color3.fromRGB(150,180,255)
-	leaveLabel.Font = Enum.Font.Gotham
-	leaveLabel.TextSize = 13
-	leaveLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-	local lastEventLabel = Instance.new("TextLabel")
-	lastEventLabel.Parent = card
-	lastEventLabel.Size = UDim2.new(1, -12, 0, 18)
-	lastEventLabel.Position = UDim2.new(0, 6, 0, 208)
-	lastEventLabel.BackgroundTransparency = 1
-	lastEventLabel.Text = "آخر حدث: —"
-	lastEventLabel.TextColor3 = Color3.fromRGB(200,200,200)
-	lastEventLabel.Font = Enum.Font.Gotham
-	lastEventLabel.TextSize = 13
-	lastEventLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-	Slots[i] = {
-		Frame = card,
-		Input = input,
-		Img = img,
-		Display = display,
-		User = userlab,
-		TimeLabel = timeLbl,
-		JoinLabel = joinLabel,
-		LeaveLabel = leaveLabel,
-		LastEventLabel = lastEventLabel,
-		Assigned = nil,
-		SessionStart = 0,
-		Joins = 0,
-		Leaves = 0,
-		LastEvent = "—",
-	}
-
-	-- تفاعل البحث: أول ما يكتب ≥2 حرف يلتقط اللاعب
-	input:GetPropertyChangedSignal("Text"):Connect(function()
-		local txt = input.Text
-		if #txt >= 2 then
-			local plr = findPlayerByQuery(txt)
-			if plr then
-				assignToSlot(i, plr)
-			end
-		elseif #txt == 0 then
-			-- لو حذفت كل النص، نفرغ الخانة بعد قليل
-			clearSlot(i)
-		end
-	end)
+    -- لو اللاعب خرج حالاً بعد الربط
+    if plr.Parent ~= Players then
+        slot.LeaveCount += 1
+        setJL(slot)
+    end
 end
 
--- انشاء 4 خانات
-for i=1,4 do createSlot(i) end
-
--- ========== Drag (سحب) للـ panel و toggleBtn ==========
-local function makeDraggable(gui)
-	gui.Active = true
-	local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
-
-	gui.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = gui.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-					dragInput = nil
-				end
-			end)
-		end
-	end)
-
-	gui.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-
-	UserInput.InputChanged:Connect(function(input)
-		if input == dragInput and dragging and dragStart and startPos then
-			local delta = input.Position - dragStart
-			local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-			gui.Position = newPos
-		end
-	end)
+-- ⬇️ التقاط باسم أو لقب ببداية الحروف (Prefix)
+local function findByPrefix(prefix: string): Player?
+    prefix = prefix:lower()
+    if #prefix < MIN_PREFIX then return nil end
+    -- أولوية: اسم المستخدم، ثم اللقب
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name:lower():sub(1, #prefix) == prefix then
+            return p
+        end
+    end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.DisplayName:lower():sub(1, #prefix) == prefix then
+            return p
+        end
+    end
+    return nil
 end
 
-makeDraggable(panel)
-makeDraggable(toggleBtn)
-
--- حفظ آخر مكان ظاهر للبانل (عشان toggle يرجع له)
-local lastPanelPos = UDim2.new(0, 12, 0.5, -230)
-panel.Position = UDim2.new(lastPanelPos.X.Scale, lastPanelPos.X.Offset - (panel.Size.X.Offset + 40), lastPanelPos.Y.Scale, lastPanelPos.Y.Offset)
-
--- ========== فتح/اغلاق بالانيميشن ==========
-local opened = false
-local function togglePanel()
-	opened = not opened
-	if opened then
-		-- إظهار: نعيده للمكان الأخير
-		local goal = lastPanelPos
-		TweenService:Create(panel, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = goal}):Play()
-		toggleBtn.Text = "إخفاء قائمة التتبع"
-	else
-		-- إخفاء: نحركه لليسار بحيث يختفي
-		local hidePos = UDim2.new(lastPanelPos.X.Scale, lastPanelPos.X.Offset - (panel.Size.X.Offset + 40), lastPanelPos.Y.Scale, lastPanelPos.Y.Offset)
-		TweenService:Create(panel, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = hidePos}):Play()
-		toggleBtn.Text = "فتح قائمة التتبع"
-	end
+-- ⬇️ بحث لحظي "سرعة البرق" لكل خانة
+for _, slot in ipairs(slots) do
+    slot.Input:GetPropertyChangedSignal("Text"):Connect(function()
+        local txt = slot.Input.Text or ""
+        if txt == "" then
+            resetSlot(slot)
+            return
+        end
+        local plr = findByPrefix(txt)
+        if plr then
+            bindPlayer(slot, plr)
+        end
+    end)
 end
 
-toggleBtn.MouseButton1Click:Connect(togglePanel)
-
--- لو سحب المستخدم البانل نحدّث lastPanelPos لما يوقف السحب (نراقب تغيّر الموضع ويحدث)
-do
-	local lastCheck = panel.Position
-	spawn(function()
-		while panel.Parent do
-			if panel.Position ~= lastCheck then
-				lastCheck = panel.Position
-				lastPanelPos = lastCheck
-			end
-			task.wait(0.2)
-		end
-	end)
-end
-
--- ========== تحديث الوقت لكل خانة (Realtime) ==========
-RunService.RenderStepped:Connect(function()
-	for i=1,4 do
-		local S = Slots[i]
-		if S and S.Assigned and S.SessionStart and S.SessionStart > 0 then
-			local elapsed = os.clock() - S.SessionStart
-			S.TimeLabel.Text = "الوقت: " .. fmtElapsed(elapsed)
-		end
-	end
+-- ⬇️ تبديل ظهور الواجهة من نفس الزرار
+ToggleButton.MouseButton1Click:Connect(function()
+    TrackerGui.Enabled = not TrackerGui.Enabled
+    ToggleButton.Text = TrackerGui.Enabled and "إخفاء التتبع" or "إظهار التتبع"
 end)
 
--- ========== تتبع دخول وخروج حقيقي مع طوابع زمن ==========
-Players.PlayerAdded:Connect(function(plr)
-	for i=1,4 do
-		local S = Slots[i]
-		if S and S.Assigned and S.Assigned.UserId == plr.UserId then
-			-- رجع اللاعب
-			S.Assigned = plr
-			S.SessionStart = os.clock()
-			S.LastEvent = "دخول"
-			S.Joins = (S.Joins or 0) + 1
-			S.JoinLabel.Text = "الدخول: " .. tostring(S.Joins)
-			S.LastEventLabel.Text = "آخر حدث: " .. tostring(S.LastEvent .. " @ " .. fmtTimeNow())
-			-- تحديث الصورة والاسم
-			pcall(function()
-				local thumb = Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-				S.Img.Image = thumb
-			end)
-			S.Display.Text = (plr.DisplayName or "—")
-			S.User.Text = "@" .. (plr.Name or "—")
-		end
-	end
+-- ⬇️ أمان: لو حصل Reset للـ Character ما نفقدش الواجهات
+LocalPlayer.CharacterAdded:Connect(function()
+    ToggleGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    TrackerGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end)
-
-Players.PlayerRemoving:Connect(function(plr)
-	for i=1,4 do
-		local S = Slots[i]
-		if S and S.Assigned and S.Assigned.UserId == plr.UserId then
-			S.LastEvent = "خروج"
-			S.Leaves = (S.Leaves or 0) + 1
-			S.LeaveLabel.Text = "الخروج: " .. tostring(S.Leaves)
-			S.LastEventLabel.Text = "آخر حدث: " .. tostring(S.LastEvent .. " @ " .. fmtTimeNow())
-			-- نوقف الجلسة لكن نحتفظ بالبيانات لثواني عشان تشوف الحدث
-			S.Assigned = nil
-			S.SessionStart = 0
-			-- نفرّغ بعد 6 ثوان لو ما رجعش
-			task.delay(6, function()
-				if S and not S.Assigned then
-					clearSlot(i)
-				end
-			end)
-		end
-	end
-end)
-
--- افتح البانل افتراضياً
-togglePanel()
-
--- === انتهى ===
